@@ -1,0 +1,8 @@
+-----------------------------------------------------------------
+Usage: pandacluster destroy CLUSTER_NAME
+-----------------------------------------------------------------
+Follow any command with "help" for more information.
+
+Terminates the specified CoreOS cluster on Amazon's EC2 cloud service and deletes
+its cloud stack.  This sub-command is pretty straight-forward and takes no options
+ other than the target name.

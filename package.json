@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "description": "Awesome Command-Line Tool and Library to Manage CoreOS Clusters",
   "main": "main.coffee",
-  "directories": {
-    "doc": "doc"
+  "bin": {
+    "pandacluster": "./bin/pandacluster"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -31,6 +31,7 @@
     "aws-sdk": "^2.0.31",
     "c50n": "^0.7.1",
     "fairmont": "^0.8.2",
-    "shelljs": "^0.3.0"
+    "shelljs": "^0.3.0",
+    "sync-request": "^1.0.1"
   }
 }
