@@ -11,7 +11,7 @@ Required:
 
   -k  Name of SSH keypair.  Access to the cluster is achieved via an SSH
         connection.  The public key with this name is placed onto every CoreOS
-        machine.  If there is no key with this name present in your AWS account,
+        machine.  *If there is no key with this name present in your AWS account,
         you will be presented with the opportunity to create one, and the
         private will be downloaded to your working directory.
 

@@ -112,7 +112,7 @@ module.exports =
     AWS.config =
       accessKeyId: credentials.id
       secretAccessKey: credentials.key
-      region: credentials.region 
+      region: credentials.region
       sslEnabled: true
 
     # Build the "params" object that is used directly by the "createStack" method.
@@ -158,7 +158,7 @@ parse_create_arguments = (argv) ->
   required_flags = ["-k", "-n"]
 
   # Loop over arguments.  To preserve the argv array, we create a temporary copy first.
-  foo = argv.slice 1
+  foo = argv[1..]
 
   while foo.length > 0
     if foo.length == 1
@@ -184,7 +184,7 @@ parse_create_arguments = (argv) ->
         usage "create", "\nError: Unrecognized Flag Provided: #{foo[0]}\n"
         process.exit -1
 
-    foo = foo.slice 2
+    foo = foo[2..]
 
   # Done looping.  Check to see if all required flags have been defined.
   if required_flags.length != 0
@@ -214,7 +214,7 @@ parse_destroy_arguments = (argv) ->
 # Here, we begin examining the command-line, starting with a search for top-level sub-commands.
 #-------------------------------------------------------------------------------
 # Chop off the argument array so that only the arguments remain.
-argv = argv.slice 2
+argv = argv[2..]
 
 # Deliver an info blurb if neccessary.
 if argv.length == 0 or argv[0] == "-h" or argv[0] == "help"

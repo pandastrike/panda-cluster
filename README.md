@@ -55,6 +55,7 @@ Here is an example layout:
 aws:
   id: "myID"
   secret: "password123"
+  region: "us-west-1"
 ```
 
 
