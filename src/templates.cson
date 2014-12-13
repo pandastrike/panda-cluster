@@ -1,0 +1,9 @@
+stable:
+  pv: "https://s3.amazonaws.com/coreos.com/dist/aws/coreos-stable-pv.template"
+  hvm: "https://s3.amazonaws.com/coreos.com/dist/aws/coreos-stable-hvm.template"
+beta:
+  pv: "https://s3.amazonaws.com/coreos.com/dist/aws/coreos-beta-pv.template"
+  hvm: "https://s3.amazonaws.com/coreos.com/dist/aws/coreos-beta-hvm.template"
+alpha:
+  pv: "https://s3.amazonaws.com/coreos.com/dist/aws/coreos-alpha-pv.template"
+  hvm: "https://s3.amazonaws.com/coreos.com/dist/aws/coreos-alpha-hvm.template"

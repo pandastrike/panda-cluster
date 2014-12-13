@@ -1,0 +1,17 @@
+-----------------------------------------------------------------
+Usage: pandacluster customize-template [OPTIONS] -f file1,file2,...
+-----------------------------------------------------------------
+Follow any command with "help" for more information.
+
+This pulls an official template from the CoreOS AWS account and modifies the
+UserData startup units to customize the cluster configuration.
+
+Required:
+  -f  Path for unit-file(s) to be added.  The paths are relative to your working
+        directory and include the filename.  Multiple files can be specified by
+        delimiting the paths with commas.
+
+--------------------------------------------------------------------------------
+Optional:
+  -p  Path for the final template file. By default, the JSON template will be
+        placed into your working directory under the filename template.json.

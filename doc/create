@@ -17,6 +17,17 @@ Required:
 
 --------------------------------------------------------------------------------
 Optional:
+  -i  Instance type on EC2. (Default = "m3.medium")  All machines in the cluster
+        are of the same type. You may select between the following EC2 instance
+        types:
+        "c1.medium", "c1.xlarge",
+        "c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge",
+        "hi1.4xlarge", "hs1.8xlarge",
+        "m1.medium", "m1.large", "m1.xlarge",
+        "m2.xlarge", "m2.2xlarge", "m2.4xlarge",
+        "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge",
+        "t1.micro"
+
   *-c  CoreOS Channel. (Default = "stable")  CoreOS offers three "channels" of its
         operating system. "stable" contains a version that has been through
         extensive battle-testing and debuging, while "beta" and "alpha" contain
@@ -36,16 +47,9 @@ Optional:
   -s  Size of cluster. (Default = 3) Clusters must have between 3 and 12
         machines, inclusive.
 
-  -t  Type of EC2 instance. (Default = "m3.medium")  All machines in the cluster
-        are of the same type. You may select between the following EC2 instance
-        types:
-        "c1.medium", "c1.xlarge",
-        "c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge",
-        "hi1.4xlarge", "hs1.8xlarge",
-        "m1.medium", "m1.large", "m1.xlarge",
-        "m2.xlarge", "m2.2xlarge", "m2.4xlarge",
-        "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge",
-        "t1.micro"
+  -t  Template File.  This is a string containing a path to the AWS template file.
+        The path should be relative to your working directory and include the
+        template filename.
 
   *-u  Upload additional public keys. (Default = null)  If you would like to
         grant cluster access to multiple users without passing your private key

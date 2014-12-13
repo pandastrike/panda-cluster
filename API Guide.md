@@ -23,6 +23,7 @@ This function spins up a CoreOS cluster using AWS and takes special instructions
 - **stack_name**: *Required* (string) Name of cluster. Alpha-numeric string of at most 255 characters.
 - **key_pair**: *Required* (string) Name of SSH keypair.  Access to the cluster is achieved via an SSH connection.  The public key with this name is placed onto every CoreOS machine.
 - **cluster_size**: (number) [Default = 3]  Clusters must have between 3 and 12 machines, inclusive.
+- **Template File.** (string)  This is a string containing a path to the AWS template file.  The path should be absolute and include the template filename.
 - **instance_type**: (string) [Default = "m3.medium"]  All machines in the cluster are of the same type. You may select between the following EC2 instance types:
   "c1.medium", "c1.xlarge",
   "c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge",
