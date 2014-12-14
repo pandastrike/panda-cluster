@@ -1,0 +1,34 @@
+------------------------------------------------------------------------
+Usage: pandacluster build-template [OPTIONS]
+------------------------------------------------------------------------
+Follow any command with "help" for more information.
+
+This function pulls an official AWS CloudFormation template from the CoreOS's
+public S3 bucket and customizes it according to your specifications.  This
+template is used to configure the cluster to your needs.
+
+Required:
+--------------------------------------------------------------------------------
+Optional:
+  -c  CoreOS "Channel". (Default = "stable")  CoreOS provides rolling updates
+        across a three-tier stability scheme.  "stable" contains a version that
+        has been through extensive battle-testing and debugging, while "beta"
+        and "alpha" contain newer features and dependency versions.
+
+        Allowed values: "stable", "beta", "alpha"
+
+  -p  Path for the final AWS CloudFormation template file, containing a JSON string.
+        The path is relative to your working directory and includes the filename.
+        By default, the file is placed into your working directory under the
+        filename template.json.
+
+  -v  Virtualization Type. (Default = "pv").  Amazon offers two types of
+        virtualization, Para-Virtualization (PV) and and Hardware-assisted
+        Virtual Machine (HVM).  In short, PV has better performance, but HVM is
+        more stable.
+
+        Allowed Values: "pv", "hvm"
+
+  -u  Path for the unit configuration file. (Default = null)  This file is a CSON
+        object that holds relevant CoreOS unit configuration data.  The path is
+        relative to your working directory and includes the filename.

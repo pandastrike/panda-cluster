@@ -4,7 +4,7 @@ Usage: pandacluster create [Options] -k KEY_PAIR -n CLUSTER_NAME
 Follow any command with "help" for more information.
 
 Spins up a CoreOS cluster on Amazon's EC2 cloud service according to several
-specified options.  (Options with [*] are not yet available)
+specified options.
 
 Required:
   -n  Name of cluster. Alpha-numeric string of at most 255 characters.
@@ -12,14 +12,14 @@ Required:
   -k  Name of SSH keypair.  Access to the cluster is achieved via an SSH
         connection.  The public key with this name is placed onto every CoreOS
         machine.  *If there is no key with this name present in your AWS account,
-        you will be presented with the opportunity to create one, and the
-        private will be downloaded to your working directory.
+        you are alerted and the process fails.
 
 --------------------------------------------------------------------------------
 Optional:
   -i  Instance type on EC2. (Default = "m3.medium")  All machines in the cluster
-        are of the same type. You may select between the following EC2 instance
-        types:
+        are of the same type.
+
+        Allowed Values:
         "c1.medium", "c1.xlarge",
         "c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge",
         "hi1.4xlarge", "hs1.8xlarge",
@@ -28,44 +28,18 @@ Optional:
         "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge",
         "t1.micro"
 
-  *-c  CoreOS Channel. (Default = "stable")  CoreOS offers three "channels" of its
-        operating system. "stable" contains a version that has been through
-        extensive battle-testing and debuging, while "beta" and "alpha" contain
-        newer features and dependency versions.
-
-        Allowed values: "stable", "beta", "alpha"
-
-  *-m  Size of additional ephemeral storage, in GB. (Default = 0)  CoreOS uses
-        Docker containers to run most applications and these containers can
-        sometimes consume a large amount of hard drive space.  This will create
-        the cluster with additional space on each machine for the partition
-        containing the Docker host.
-
-  *-r  AWS Region.  Your default region is set in the PandaCluster dotfile, but you
+  -r  AWS Region.  Your default region is set in the PandaCluster dotfile, but you
         may temporarily override that region for this command.
+
+        Allowed Values: "ap-northeast-1", "ap-southeast-1", "ap-southeast-2",
+        "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1",
+        "us-west-2"
 
   -s  Size of cluster. (Default = 3) Clusters must have between 3 and 12
         machines, inclusive.
 
-  -t  Template File.  This is a string containing a path to the AWS template file.
-        The path should be relative to your working directory and include the
-        template filename.
-
-  *-u  Upload additional public keys. (Default = null)  If you would like to
-        grant cluster access to multiple users without passing your private key
-        around, you may place these users' public keys on each machine of the
-        CoreOS cluster when the cluster is created.
-
-        This flag takes a CSON file that contains an array of public keys:
-
-        public_keys:[
-          "key1",
-          "key2",
-          "key3"
-        ]
-
-  *-v  Virtualization Type. (Default = "pv").  Amazon offers two types of
-        virtualization, para-virtualization (PV) and and hardware-assisted virtual
-        machine (HVM).  In short, PV has better performance, but HVM is more stable.
-
-        Allowed Values: "pv", "hvm"
+  -t  Template File.  (Default = "Stable" Channel AMI using PV). This is a string
+        containing a path to the AWS template file.  The path is relative
+        to your working directory and include the template filename. If no
+        template file is provided, PandaCluster pulls the latest CoreOS AMI from
+        the "stable" channel and requests a build using para-virtualization (PV).

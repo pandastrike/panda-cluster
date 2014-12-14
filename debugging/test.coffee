@@ -1,3 +1,6 @@
+{resolve} = require "path"
+{parse} = require "c50n"
+{read} = require "fairmont"
 pc = require "../src/pandacluster"
 
 options =
@@ -18,4 +21,5 @@ options =
     content: "../units/docker-tcp.service"
   }]
 
-pc.customize_template( options )
+options2 = parse (read (resolve ("template-config.cson")))
+pc.customize_template( options2 )
