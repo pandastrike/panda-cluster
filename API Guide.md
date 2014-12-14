@@ -1,9 +1,14 @@
 # PandaCluster API Guide
 This guide aims to document and specify the API of PandaCluster when used as a Node library.
 
+Methods:
+**build_template**
+**create**
+**destroy**
+
 
 ### credentials
-All of the following methods access your AWS account to do things for you automatically.  Getting that access means they'll need your AWS credentials.  Remember to never hardcode your credentials into your project.  
+Before we talk about the methods, we should first mention the `credentials` object.  Most of the following methods access your AWS account to do things for you automatically.  Getting that access means they'll need your AWS credentials.  Remember to never hardcode your credentials into your project.  
 
 The object `credentials` is passed into most of the below functions and contains the following members:
 
@@ -14,7 +19,7 @@ credentials =
   region: "us-west-1"
 ```
 
-
+---
 ## build_template([options])
 This function pulls an official AWS CloudFormation template from the CoreOS's public S3 bucket and customizes it according to your specifications.  This template is used to configure the cluster to your needs.
 
@@ -33,7 +38,7 @@ This argument is optional.  It is an object with the following members, all of w
 
 **units** -  Path for the unit configuration file. (Default = null)  This file is a CSON object that holds relevant CoreOS unit configuration data.  The path is relative to your working directory and includes the filename.  Units conform to CoreOS's systemd format, and samples are available [here](https://github.com/pandastrike/PandaCluster/tree/master/units).  These unit files do a lot for you.  The linked directory contains some basic ones from CoreOS, exposing and adding ephemeral storage to the Docker Host.
 
-## Create (credentials, options)
+## create (credentials, options)
 This function spins up a CoreOS cluster using AWS and takes special instructions through "options":
 ### options
 This is an object with the following members:
