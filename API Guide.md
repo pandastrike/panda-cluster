@@ -2,8 +2,11 @@
 This guide aims to document and specify the API of PandaCluster when used as a Node library.
 
 Methods:
+
 **build_template**
+
 **create**
+
 **destroy**
 
 
