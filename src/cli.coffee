@@ -13,7 +13,7 @@
 {read, write, remove} = require "fairmont" # Easy file read/write
 {parse} = require "c50n"                   # .cson file parsing
 
-PC = require "./pandacluster-es6"          # Access PandaCluster!!
+PC = require "./pandacluster"          # Access PandaCluster!!
 
 
 
