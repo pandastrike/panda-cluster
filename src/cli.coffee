@@ -13,7 +13,7 @@
 {read, write, remove} = require "fairmont" # Easy file read/write
 {parse} = require "c50n"                   # .cson file parsing
 
-PC = require "./pandacluster"              # Access PandaCluster!!
+PC = require "./pandacluster-es6"          # Access PandaCluster!!
 
 
 
@@ -62,7 +62,7 @@ allow_between = (allowed_min, allowed_max, value, flag) ->
 #------------------------
 parse_build_template_arguments = (argv) ->
   # Deliver an info blurb if neccessary.
-  if argv.length == 1 or argv[1] == "-h" or argv[1] == "help" or argv.length > 2
+  if argv[1] == "-h" or argv[1] == "help" or argv.length > 2
     usage "build_template"
 
   # Begin buliding the "options" object.
@@ -91,7 +91,12 @@ parse_build_template_arguments = (argv) ->
 
     argv = argv[2..]
 
-  # After successful parsing, return the completed "options" object.
+  # Parsing complete.  As referenced in the docs, failure to provide a template
+  # "write_path" results in PandaCluster defaulting to the working directory.
+  unless options.write_path?
+    options.write_path = "template.json"
+
+  # Return the completed "options" object.
   return options
 
 
@@ -186,7 +191,7 @@ if argv.length == 0 or argv[0] == "-h" or argv[0] == "help"
 switch argv[0]
   when "build-template"
     options = parse_build_template_arguments argv
-    PC.build_template credentials, options
+    PC.build_template options
   when "create"
     credentials = extract_credentials "#{process.env.HOME}/.pandacluster.cson"
     options = parse_create_arguments argv

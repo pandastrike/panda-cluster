@@ -15,7 +15,19 @@ The problem is that managing these clusters can be a little tedious.  Imagine th
 
 
 ## Installation
-PandaCluster is available as an npm package.  How you install PandaCluster depends on how you'd like to use it.  Don't worry, both are easy.  
+PandaCluster is available as an npm package.  How you install PandaCluster depends on how you'd like to use it.  Don't worry, both are easy.  However, it should be noted that PandaCluster makes use of the ES6 standards, promises and generators.  Using this library requires Node 0.11.2 or greater.
+
+  ```shell
+  git clone https://github.com/creationix/nvm.git ~/.nvm
+  cd ~/.nvm
+  git checkout `git describe --abbrev=0 --tags`
+  source ~/.nvm/nvm.sh && nvm install 0.11
+  ```
+
+  Compiling the CoffeeScript requires the latest development branch of version 1.8.
+  ```shell
+  npm install -g jashkenas/coffee-script
+  ```
 
 ### Command-Line Tool
 If you'd like to use PandaCluster's command-line tool on your local machine, install it globally.
