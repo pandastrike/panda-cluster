@@ -265,3 +265,61 @@ module.exports =
     #---------------------
     # With everything in place, we may finally make a call to Amazon's API.
     yield destroy_cluster params
+
+  # This method uploads public SSH keys
+  # FIXME: where to pass in credentials
+  upload: async (credentials, options) ->
+    AWS.config =
+      accessKeyId: credentials.id
+      secretAccessKey: credentials.key
+      region: options.region or credentials.region
+      sslEnabled: true
+
+      # TODO: validate the existence of the target files throw errors if don't exist
+    ssh_keys = []
+    for file in options.files
+      ssh_file = read( resolve_path( process.cwd(), file))
+      ssh_keys.push ssh_file
+    params.ssh_keys = ssh_keys
+
+    #---------------------
+    # Access AWS
+    #---------------------
+    # With everything in place, we may finally make a call to Amazon's API.
+    instances = yield get_stack_resources options.stack_name
+    yield upload_ssh_keys params
+
+### upload helper function ###
+get_instances_addresses = (params) ->
+  ec2 = new AWS.EC2()
+
+  ec2.describeInstances {stackName: options.stack_name}, (err, data) ->
+    unless err
+      if names.indexOf(key_pair) == -1
+        process.stderr.write "\nError: This AWS account does not have a key pair named \"#{key_pair}\".\n\n"
+        process.exit -1
+      for key in data.KeyPairs
+        names.push key.KeyName
+      resolve true
+    else
+      process.stderr.write "\nError:  Unable to upload SSH key.\n"
+      process.stderr.write "#{err}\n\n"
+      process.exit -1
+
+get_stack_resources = (stack_name) ->
+    cloudformation = new AWS.CloudFormation()
+
+    # Retrieve InstanceIDs for each member of the CloudFormation cluster
+    promise (resolve, reject) ->
+      cloudformation.describeStackResources {stackName: stack_name}
+        .on "response", (response) ->
+          instances = data.StackResources
+          if instances.length == 0
+            process.stderr.write "\nError:  Resources for stack #{stack_name} is empty.\n"
+            process.stderr.write "#{err}\n\n"
+            process.exit -1
+          else
+            resolve instances
+        .on "error", (error) ->
+          process.stderr.write "\nApologies. Cluster formation describeStackResources has failed.\n\n#{err}\n"
+          process.exit -1

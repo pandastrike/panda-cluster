@@ -175,6 +175,44 @@ parse_destroy_arguments = (argv) ->
   # After successful parsing, return the completed "options" object.
   return options
 
+#------------------------
+# Upload public SSH Keys
+#------------------------
+parse_upload_arguments = (argv) ->
+  if argv.length == 1 or argv[1] == "-h" or argv[1] == "help"
+    usage "upload"
+
+  # Begin buliding the "options" object.
+  options = {}
+
+  # Establish an array of flags that *must* be found for this method to succeed.
+  required_flags = ["-n", "-p"]
+
+  # Loop over arguments.  Collect settings and validate where possible.
+  argv = argv[1..]
+
+  while argv.length > 0
+    if argv.length == 1
+      usage "create", "\nError: Flag Provided But Not Defined: #{argv[0]}\n"
+
+    switch argv[0]
+      when "-n"
+        options.stack_name = argv[1]
+        remove required_flags, "-n"
+      when "-p"
+        options.ssh_file_path = argv[1]
+        remove required_flags, "-p"
+      else
+        usage "create", "\nError: Unrecognized Flag Provided: #{argv[0]}\n"
+
+    argv = argv[2..]
+
+  # Done looping.  Check to see if all required flags have been defined.
+  if required_flags.length != 0
+    usage "upload", "\nError: Mandatory Flag(s) Remain Undefined: #{required_flags}\n"
+
+  # After successful parsing, return the completed "options" object.
+  return options
 
 
 #===============================================================================
