@@ -15,6 +15,8 @@ https = require "https"
 {promise} = require "when"                # Awesome promise library
 async = (require "when/generator").lift   # Makes resuable generators.
 
+{exec} = require "shelljs"                # Access to commandline
+
 AWS = require "aws-sdk"                   # Access AWS API
 
 
@@ -140,6 +142,48 @@ destroy_cluster = (params) ->
       else
         process.stderr.write "\nApologies. Cluster destruction has failed.\n\n#{err}\n"
         process.exit -1
+
+
+# Retrieve InstanceIds for each member of the CloudFormation cluster
+get_stack_resources = (stack_name) ->
+  promise (resolve, reject) ->
+    cloudformation = new AWS.CloudFormation()
+    cloudformation.describeStackResources {stackName: stack_name}
+      unless err
+        instances = data.StackResources
+        if instances.length == 0
+          process.stderr.write "\nError:  Resources for stack #{stack_name} is empty.\n"
+          process.exit -1
+        else
+          resolve instances
+      else
+        process.stderr.write "\nApologies. Cluster formation describeStackResources has failed.\n\n"
+        process.stderr.write "#{err}\n\n"
+        process.exit -1
+
+
+# Retrieves instances (and their IP addresses) based on InstanceIds from get_stack_resources
+get_instances_addresses = (params) ->
+  promise (resolve, reject) ->
+    ec2 = new AWS.EC2()
+    ec2.describeInstances {InstanceIds: params.instance_ids}, (err, data) ->
+      unless err
+        instances = data.Instances
+        if instances.length == 0
+          process.stderr.write "\nError: No instances match InstanceIds \"#{params.instance_ids}\".\n\n"
+          process.exit -1
+        else
+          resolve instances
+      else
+        process.stderr.write "\nError:  Unable to request describeInstances from EC2 .\n"
+        process.stderr.write "#{err}\n\n"
+        process.exit -1
+
+
+# Uploads SSH public keys to given IP addresses
+upload_keys_via_ssh = (addresses, keys) ->
+  exec "bash #{__dirname}/scripts/upload #{keys} #{addresses}"
+
 
 #===============================
 # PandaCluster Definition
@@ -275,51 +319,24 @@ module.exports =
       region: options.region or credentials.region
       sslEnabled: true
 
-      # TODO: validate the existence of the target files throw errors if don't exist
+    # TODO: validate the existence of the target files throw errors if don't exist
     ssh_keys = []
     for file in options.files
       ssh_file = read( resolve_path( process.cwd(), file))
       ssh_keys.push ssh_file
-    params.ssh_keys = ssh_keys
 
     #---------------------
     # Access AWS
     #---------------------
     # With everything in place, we may finally make a call to Amazon's API.
-    instances = yield get_stack_resources options.stack_name
-    yield upload_ssh_keys params
+    stack_resources= yield get_stack_resources options.stack_name
+    params.instances_ids = resource.StackResources.PhysicalResourceId for resource in stack_resources
+    instances = yield upload_ssh_keys params
+    instances_addresses = instance.state.PrivateIpAddresses for instance in instances
 
-### upload helper function ###
-get_instances_addresses = (params) ->
-  ec2 = new AWS.EC2()
+    #-----------------------------
+    # SSH into Cluster Instances
+    #-----------------------------
+    upload_keys_via_ssh instances_addresses, ssh_keys
 
-  ec2.describeInstances {stackName: options.stack_name}, (err, data) ->
-    unless err
-      if names.indexOf(key_pair) == -1
-        process.stderr.write "\nError: This AWS account does not have a key pair named \"#{key_pair}\".\n\n"
-        process.exit -1
-      for key in data.KeyPairs
-        names.push key.KeyName
-      resolve true
-    else
-      process.stderr.write "\nError:  Unable to upload SSH key.\n"
-      process.stderr.write "#{err}\n\n"
-      process.exit -1
 
-get_stack_resources = (stack_name) ->
-    cloudformation = new AWS.CloudFormation()
-
-    # Retrieve InstanceIDs for each member of the CloudFormation cluster
-    promise (resolve, reject) ->
-      cloudformation.describeStackResources {stackName: stack_name}
-        .on "response", (response) ->
-          instances = data.StackResources
-          if instances.length == 0
-            process.stderr.write "\nError:  Resources for stack #{stack_name} is empty.\n"
-            process.stderr.write "#{err}\n\n"
-            process.exit -1
-          else
-            resolve instances
-        .on "error", (error) ->
-          process.stderr.write "\nApologies. Cluster formation describeStackResources has failed.\n\n#{err}\n"
-          process.exit -1

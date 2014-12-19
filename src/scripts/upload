@@ -1,0 +1,18 @@
+# This Bash script adds SSH public keys to authorized_hosts for given IP addresses
+# $1 = List of CloudFormation instances private IP addresses
+# $2 = List of SSH public keys as strings
+
+for address in $1 #FIXME: figure out how bash handles javascript string array input
+do
+  ssh $1 /usr/bin/bash << EOF
+    touch ~/.ssh/authorized_hosts
+    for key in $2
+    do
+      echo key >> authorized_hosts
+    done
+  EOF
+done
+
+echo ""
+echo "The SSH public keys have been added to the CloudFormation instances" 
+echo ""
