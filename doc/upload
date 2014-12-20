@@ -1,0 +1,16 @@
+-----------------------------------------------------------------
+Usage: pandacluster upload [Options] -n CLUSTER_NAME -p PATH_TO_KEYS
+-----------------------------------------------------------------
+Follow any command with "help" for more information.
+
+Uploads SSH public keys to all members of a cluster given the cluster name.
+
+Required:
+  -n  Name of cluster. Alpha-numeric string of at most 255 characters.
+        Access to the cluster is achieved via an SSH connection. 
+
+  -p  Path to SSH keypair on local machine.   The public key with this name is 
+        placed onto every CoreOS machine.  *If there is no key with this name 
+        present in your AWS account, you are alerted and the process fails.
+
+--------------------------------------------------------------------------------
