@@ -17,6 +17,10 @@ async = (require "when/generator").lift   # Makes resuable generators.
 
 {exec} = require "shelljs"                # Access to commandline
 
+{liftAll} = require "when/node"                 # ES6 styled way for file IO
+{call} = require "when/generator"
+{readFile, writeFile} = (liftAll require "fs")
+
 AWS = require "aws-sdk"                   # Access AWS API
 
 
@@ -148,7 +152,7 @@ destroy_cluster = (params) ->
 get_stack_resources = (stack_name) ->
   promise (resolve, reject) ->
     cloudformation = new AWS.CloudFormation()
-    cloudformation.describeStackResources {stackName: stack_name}
+    cloudformation.describeStackResources {stackName: stack_name}, (err, data) ->
       unless err
         instances = data.StackResources
         if instances.length == 0
@@ -179,8 +183,37 @@ get_instances_addresses = (params) ->
         process.stderr.write "#{err}\n\n"
         process.exit -1
 
+# Read SSH public key files on local machine
+read_keys_from_local = (files) ->
+  ssh_keys = []
+  for file in files
+    try
+      ssh_file = yield readFile( resolve_path( process.cwd(), file))
+      ssh_keys.push ssh_file
+    catch
+      console.log "Error occured reading SSH public key file: #{error}"
+      process.exit -1
+  return ssh_keys
+
+# Write SSH public key file to cluster instances
+write_authorized_hosts = (contents, path) ->
+  ssh_keys = []
+  for file in options.files
+    try
+      ssh_file = yield writeFile( resolve_path( process.cwd(), file))
+      ssh_keys.push ssh_file
+    catch
+      console.log "Error occured reading SSH public key file: #{error}"
+      process.exit -1
+  return true
+
+# Download SSH public keys to given IP addresses
+# Default location downloaded to localhost: /tmp/pandacluster_authorized_hosts
+download_keys_via_ssh = (addresses) ->
+  exec "bash #{__dirname}/scripts/download #{addresses}"
 
 # Uploads SSH public keys to given IP addresses
+# Default location uploaded from localhost: /tmp/pandacluster_authorized_hosts
 upload_keys_via_ssh = (addresses, keys) ->
   exec "bash #{__dirname}/scripts/upload #{keys} #{addresses}"
 
@@ -319,24 +352,22 @@ module.exports =
       region: options.region or credentials.region
       sslEnabled: true
 
-    # TODO: validate the existence of the target files throw errors if don't exist
-    ssh_keys = []
-    for file in options.files
-      ssh_file = read( resolve_path( process.cwd(), file))
-      ssh_keys.push ssh_file
+    #---------------------
+    # Read in keys the user wants to upload from local machine
+    #---------------------
+    ssh_keys = read_keys_from_local options.files
 
     #---------------------
     # Access AWS
     #---------------------
-    # With everything in place, we may finally make a call to Amazon's API.
     stack_resources= yield get_stack_resources options.stack_name
     params.instances_ids = resource.StackResources.PhysicalResourceId for resource in stack_resources
     instances = yield upload_ssh_keys params
     instances_addresses = instance.state.PrivateIpAddresses for instance in instances
 
-    #-----------------------------
+    #---------------------
     # SSH into Cluster Instances
-    #-----------------------------
+    #---------------------
     upload_keys_via_ssh instances_addresses, ssh_keys
 
 

@@ -8,3 +8,4 @@ A tool to manage CoreOS clusters and deploy them on AWS with your account.
 Commands:
    create    Spins up a cluster of the requested size.
    destroy   Terminates the specified cluster.
+   upload    Uploads specified public keys to cluster.

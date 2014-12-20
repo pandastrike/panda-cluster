@@ -238,6 +238,10 @@ switch argv[0]
     credentials = extract_credentials "#{process.env.HOME}/.pandacluster.cson"
     options = parse_destroy_arguments argv
     PC.destroy credentials, options
+  when "upload"
+    credentials = extract_credentials "#{process.env.HOME}/.pandacluster.cson"
+    options = parse_upload_arguments argv
+    PC.upload credentials, options
   else
     # When the command cannot be identified, display the help guide.
     usage "main", "\nError: Command Not Found: #{argv[0]} \n"
