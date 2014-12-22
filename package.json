@@ -32,9 +32,10 @@
     "c50n": "^0.7.1",
     "fairmont": "^0.8.2",
     "shelljs": "^0.3.0",
+    "underscore": "^1.7.0",
     "when": "^3.6.4"
   },
-  "engines" : {
-    "node" : ">=0.11.2" 
+  "engines": {
+    "node": ">=0.11.2"
   }
 }

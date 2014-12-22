@@ -12,7 +12,8 @@ resolve_path = (x...) -> resolve(x...)    # Avoids confusion with "resolve" of p
 {parse} = require "c50n"                  # .cson file parsing
 
 https = require "https"
-{promise} = require "when"                # Awesome promise library
+{lift} = require "when"                # Awesome promise library
+node_lift = (require "when/node").lift
 async = (require "when/generator").lift   # Makes resuable generators.
 
 AWS = require "aws-sdk"                   # Access AWS API
@@ -71,7 +72,7 @@ add_unit = (cloud_config, unit) ->
   cloud_config.push "    - name: #{unit.name}\n"
   cloud_config.push "      runtime: #{unit.runtime}\n"   if unit.runtime?
   cloud_config.push "      command: #{unit.command}\n"   if unit.command?
-  cloud_config.push "      enable: #{unit.enable}\n"       if unit.enable?
+  cloud_config.push "      enable: #{unit.enable}\n"     if unit.enable?
   cloud_config.push "      content: |\n"
 
   # For "content", we draw from a unit-file maintained in a separate file. Add
@@ -86,60 +87,57 @@ add_unit = (cloud_config, unit) ->
 
   return cloud_config
 
-# Confirm that the named SSH key exists in your AWS account.  This is a promise
-# wrapper for the EC2 module's "describeKeyPairs" function, and it assumes that
-# the AWS object has already been configured with your credentials.
-validate_key_pair = (key_pair) ->
-  promise (resolve, reject) ->
-    ec2 = new AWS.EC2()
 
-    ec2.describeKeyPairs {}, (err, data) ->
-      unless err
-        names = []
-        for key in data.KeyPairs
-          names.push key.KeyName
+# Configure the AWS object for account access.
+set_aws_creds = (creds) ->
+  return {
+    accessKeyId: credentials.id
+    secretAccessKey: credentials.key
+    region: credentials.region
+    sslEnabled: true
+  }
 
-        if names.indexOf(key_pair) == -1
-          process.stderr.write "\nError: This AWS account does not have a key pair named \"#{key_pair}\".\n\n"
-          process.exit -1
+# Confirm that the named SSH key exists in your AWS account.
+validate_key_pair = (key_pair, creds) ->
+  AWS.config = set_aws_creds creds
+  describe_key_pairs = node_lift (new AWS.EC2()).describeKeyPairs
 
-        resolve true
+  describe_key_pairs {}
+  .then (data) ->
+    names = []
+    for key in data.KeyPairs
+      names.push key.KeyName
 
-      else
-        process.stderr.write "\nError:  Unable to validate SSH key.\n"
-        process.stderr.write "#{err}\n\n"
-        process.exit -1
+    if names.indexOf(key_pair) == -1
+      throw "\nError: This AWS account does not have a key pair named \"#{key_pair}\".\n\n"
+
+  .catch (err) ->
+      throw "\nError:  Unable to validate SSH key.\n #{err}\n\n"
+
 
 
 # Create a CoreOS cluster using the AWS account information that has been gathered.
-# This is a promise wrapper for the CloudFormation module's "createStack" function,
-# and it assumes the AWS object has already been configured with your crednetials.
-create_cluster = (params) ->
-  promise (resolve, reject) ->
-    cloudformation = new AWS.CloudFormation()
+create_cluster = (params, creds) ->
+  AWS.config = set_aws_creds creds
+  create_stack = node_lift (new AWS.CloudFormation()).createStack
 
-    cloudformation.createStack params, (err, data) ->
-      unless err
-        process.stdout.write "\nSuccess!!  Cluster formation is in progress.\n"
-        resolve true
-      else
-        process.stderr.write "\nApologies. Cluster formation has failed.\n\n#{err}\n"
-        process.exit -1
+  create_stack params
+  .then (data) ->
+    process.stdout.write "\nSuccess!!  Cluster formation is in progress.\n"
+  .catch (err) ->
+    throw "\nApologies. Cluster formation has failed.\n\n#{err}\n"
 
 
 # Destroy a CoreOS cluster using the AWS account information that has been gathered.
-# This is a promise wrapper for the CloudFormation module's "deleteStack" function,
-# and it assumes the AWS object has already been configured with your crednetials.
 destroy_cluster = (params) ->
-  promise (resolve, reject) ->
-    cloudformation = new AWS.CloudFormation()
-    cloudformation.deleteStack params, (err, data) ->
-      unless err
-        process.stdout.write "\nSuccess!!  Cluster destruction is in progress.\n"
-        resolve true
-      else
-        process.stderr.write "\nApologies. Cluster destruction has failed.\n\n#{err}\n"
-        process.exit -1
+  AWS.config = set_aws_creds creds
+  delete_stack = node_lift (new AWS.CloudFormation()).deleteStack
+
+  delete_stack params
+  .then (data) ->
+    process.stdout.write "\nSuccess!!  Cluster destruction is in progress.\n"
+  .catch (err) ->
+    throw "\nApologies. Cluster destruction has failed.\n\n#{err}\n"
 
 #===============================
 # PandaCluster Definition
@@ -149,8 +147,9 @@ module.exports =
   # This method builds an AWS CloudFormation template by augmenting the official
   # ones released by CoreOS.
   build_template: async (options) ->
-
-    options = options or {}
+    console.log options
+    # Provide the default for the template "write_path", if needed.
+    options.write_path = "template.json" unless options.write_path?
 
     # Pull official CoreOS template as a JSON object.
     template_object = yield pull_cloud_template options
@@ -169,7 +168,7 @@ module.exports =
     template_object.Resources.CoreOSServerLaunchConfig.Properties.UserData = user_data
 
     # Return or write the JSON string to a file.
-    if options.write_path?
+    if options.write_path
       write "#{process.cwd()}/#{options.write_path}", JSON.stringify( template_object, null, '\t' )
       return
     else
@@ -179,12 +178,7 @@ module.exports =
 
   # This method creates and starts a CoreOS cluster.
   create: async (credentials, options) ->
-    # Configure the AWS object for account access.
-    AWS.config =
-      accessKeyId: credentials.id
-      secretAccessKey: credentials.key
-      region: options.region or credentials.region
-      sslEnabled: true
+    credentials.region = options.region or credentials.region
 
     # Build the "params" object that is used directly by the "createStack" method.
     params = {}
@@ -198,49 +192,39 @@ module.exports =
     if options.template_path?
       params.TemplateBody = read( resolve_path( process.cwd(), options.template_path))
     else
-      params.TemplateBody = yield @build_template()
+      params.TemplateBody = yield @build_template {write_path: false}
 
     #---------------------------------------------------------------------------
     # Parameters is a map of key/values custom defined for this stack by the
     # template file.  We will now fill out the map as specified or with defaults.
     #---------------------------------------------------------------------------
-    params.Parameters = []
-
-    # InstanceType
-    foo =
+    params.Parameters = [
+      # InstanceType
       "ParameterKey": "InstanceType"
       "ParameterValue": options.instance_type or "m3.medium"
-    params.Parameters.push foo
 
-    # ClusterSize
-    foo =
+      # ClusterSize
       "ParameterKey": "ClusterSize"
       "ParameterValue": options.cluster_size or "3"
-    params.Parameters.push foo
 
-    # DiscoveryURL - Grab a randomized URL from etcd's free discovery service.
-    bar = yield https_get "https://discovery.etcd.io/new"
-    bar = yield get_body bar
-    foo =
+      # DiscoveryURL - Grab a randomized URL from etcd's free discovery service.
       "ParameterKey": "DiscoveryURL"
-      "ParameterValue": bar
-    params.Parameters.push foo
+      "ParameterValue":
+        yield get_body( yield https_get( "https://discovery.etcd.io/new"))
 
-    # KeyPair
-    yield validate_key_pair options.key_pair
-    foo =
+      # KeyPair
       "ParameterKey": "KeyPair"
-      "ParameterValue": options.key_pair
-    params.Parameters.push foo
+      "ParameterValue": yield lift( validate_key_pair( options.key_pair, credentials))
 
-    # AdvertisedIPAddress - uses default "private", TODO: Add this option
-    # AllowSSHFrom        - uses default "everywhere", TODO: Add this option
+      # AdvertisedIPAddress - uses default "private", TODO: Add this option
+      # AllowSSHFrom        - uses default "everywhere", TODO: Add this option
+    ]
 
     #---------------------
     # Access AWS
     #---------------------
     # With everything in place, we may finally make a call to Amazon's API.
-    yield create_cluster params
+    yield lift( create_cluster( params, credentials))
 
 
 
@@ -249,12 +233,7 @@ module.exports =
 
   # This method stops and destroys a CoreOS cluster.
   destroy: async (credentials, options) ->
-    # Configure the AWS object for account access.
-    AWS.config =
-      accessKeyId: credentials.id
-      secretAccessKey: credentials.key
-      region: options.region or credentials.region
-      sslEnabled: true
+    credentials.region = options.region or credentials.region
 
     # Build the "params" object that is used directly by the "createStack" method.
     params = {}
@@ -264,4 +243,4 @@ module.exports =
     # Access AWS
     #---------------------
     # With everything in place, we may finally make a call to Amazon's API.
-    yield destroy_cluster params
+    yield lift( destroy_cluster( params, credentials))
