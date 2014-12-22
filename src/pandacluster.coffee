@@ -167,21 +167,27 @@ get_stack_resources = (stack_name) ->
 
 
 # Retrieves instances (and their IP addresses) based on InstanceIds from get_stack_resources
-get_instances_addresses = (instance_ids) ->
-  promise (resolve, reject) ->
+get_instances_addresses = async (stack_name) ->
     ec2 = new AWS.EC2()
-    ec2.describeInstances {InstanceIds: instance_ids}, (err, data) ->
-      unless err
-        instances = data.Instances
-        if instances.length == 0
-          process.stderr.write "\nError: No instances match InstanceIds \"#{instance_ids}\".\n\n"
-          process.exit -1
-        else
-          resolve instances
-      else
-        process.stderr.write "\nError:  Unable to request describeInstances from EC2 .\n"
-        process.stderr.write "#{err}\n\n"
+    params =
+      Filters: [
+        {Name: stack_name}
+      ]
+    try
+      {data} = yield ec2.describeInstances params
+
+      console.log "my data: ", data
+      instances = data.Instances
+      if instances.length == 0
+        process.stderr.write "\nError: No instances match StackName\"#{stack_name}\".\n\n"
         process.exit -1
+      else
+        return instances
+    catch error
+      process.stderr.write "\nError:  Unable to request describeInstances from EC2 .\n"
+      process.stderr.write "#{error}\n\n"
+      process.exit -1
+
 
 # Read SSH public key files on local machine
 read_keys_from_local = (ssh_file_path) ->
@@ -374,7 +380,7 @@ module.exports =
 #         instance_ids.push instance_id
 #    console.log instance_ids
 #    instances = (yield get_instances_addresses instance_ids)
-    instances = (yield get_instances_addresses peter-test)
+    instances = (yield get_instances_addresses options.stack_name)
     console.log instances
     #instances_addresses = instance.state.PrivateIpAddresses for instance in instances
 #    instances = yield upload_ssh_keys params
