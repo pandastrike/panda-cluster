@@ -20,9 +20,9 @@ async = (require "when/generator").lift   # Makes resuable generators.
 {liftAll} = require "when/node"                 # ES6 styled way for file IO
 {call} = require "when/generator"
 {readFile, writeFile} = (liftAll require "fs")
+StringDecoder = require('string_decoder').StringDecoder   # Convert SSH file stream to string
 
 AWS = require "aws-sdk"                   # Access AWS API
-
 
 
 #================================
@@ -152,7 +152,7 @@ destroy_cluster = (params) ->
 get_stack_resources = (stack_name) ->
   promise (resolve, reject) ->
     cloudformation = new AWS.CloudFormation()
-    cloudformation.describeStackResources {stackName: stack_name}, (err, data) ->
+    cloudformation.describeStackResources {StackName: stack_name}, (err, data) ->
       unless err
         instances = data.StackResources
         if instances.length == 0
@@ -161,7 +161,7 @@ get_stack_resources = (stack_name) ->
         else
           resolve instances
       else
-        process.stderr.write "\nApologies. Cluster formation describeStackResources has failed.\n\n"
+        process.stderr.write "\nApologies. Cluster describeStackResources has failed.\n\n"
         process.stderr.write "#{err}\n\n"
         process.exit -1
 
@@ -184,28 +184,32 @@ get_instances_addresses = (params) ->
         process.exit -1
 
 # Read SSH public key files on local machine
-read_keys_from_local = (files) ->
-  ssh_keys = []
-  for file in files
+read_keys_from_local = (ssh_file_path) ->
+  call ->
+    decoder = new StringDecoder('utf8')
+    ssh_keys = []
+    # TODO: handle multiple files
     try
-      ssh_file = yield readFile( resolve_path( process.cwd(), file))
-      ssh_keys.push ssh_file
-    catch
+      ssh_file_buffer = yield readFile ssh_file_path
+      ssh_file_string = decoder.write ssh_file_buffer
+      ssh_keys.push ssh_file_string
+    catch error
       console.log "Error occured reading SSH public key file: #{error}"
       process.exit -1
-  return ssh_keys
+    return ssh_keys
 
 # Write SSH public key file to cluster instances
 write_authorized_hosts = (contents, path) ->
-  ssh_keys = []
-  for file in options.files
-    try
-      ssh_file = yield writeFile( resolve_path( process.cwd(), file))
-      ssh_keys.push ssh_file
-    catch
-      console.log "Error occured reading SSH public key file: #{error}"
-      process.exit -1
-  return true
+  call ->
+    ssh_keys = []
+    for file in options.files
+      try
+        ssh_file = yield writeFile( resolve_path( process.cwd(), file))
+        ssh_keys.push ssh_file
+      catch error
+        console.log "Error occured reading SSH public key file: #{error}"
+        process.exit -1
+    return true
 
 # Download SSH public keys to given IP addresses
 # Default location downloaded to localhost: /tmp/pandacluster_authorized_hosts
@@ -355,19 +359,19 @@ module.exports =
     #---------------------
     # Read in keys the user wants to upload from local machine
     #---------------------
-    ssh_keys = read_keys_from_local options.files
+    ssh_keys = yield read_keys_from_local options.ssh_file_path
 
     #---------------------
     # Access AWS
     #---------------------
     stack_resources= yield get_stack_resources options.stack_name
-    params.instances_ids = resource.StackResources.PhysicalResourceId for resource in stack_resources
-    instances = yield upload_ssh_keys params
-    instances_addresses = instance.state.PrivateIpAddresses for instance in instances
-
-    #---------------------
-    # SSH into Cluster Instances
-    #---------------------
-    upload_keys_via_ssh instances_addresses, ssh_keys
+#    params.instances_ids = resource.StackResources.PhysicalResourceId for resource in stack_resources
+#    instances = yield upload_ssh_keys params
+#    instances_addresses = instance.state.PrivateIpAddresses for instance in instances
+#
+#    #---------------------
+#    # SSH into Cluster Instances
+#    #---------------------
+#    upload_keys_via_ssh instances_addresses, ssh_keys
 
 
