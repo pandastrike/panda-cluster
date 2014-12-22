@@ -167,14 +167,14 @@ get_stack_resources = (stack_name) ->
 
 
 # Retrieves instances (and their IP addresses) based on InstanceIds from get_stack_resources
-get_instances_addresses = (params) ->
+get_instances_addresses = (instance_ids) ->
   promise (resolve, reject) ->
     ec2 = new AWS.EC2()
-    ec2.describeInstances {InstanceIds: params.instance_ids}, (err, data) ->
+    ec2.describeInstances {InstanceIds: instance_ids}, (err, data) ->
       unless err
         instances = data.Instances
         if instances.length == 0
-          process.stderr.write "\nError: No instances match InstanceIds \"#{params.instance_ids}\".\n\n"
+          process.stderr.write "\nError: No instances match InstanceIds \"#{instance_ids}\".\n\n"
           process.exit -1
         else
           resolve instances
@@ -364,10 +364,20 @@ module.exports =
     #---------------------
     # Access AWS
     #---------------------
-    stack_resources= yield get_stack_resources options.stack_name
-#    params.instances_ids = resource.StackResources.PhysicalResourceId for resource in stack_resources
+#    stack_resources= yield get_stack_resources options.stack_name
+#    console.log stack_resources
+#    instance_ids = []
+#    for resource in stack_resources
+#       instance_id = (yield resource.PhysicalResourceId)
+#       stack_name_length = options.stack_name.length
+#       if instance_id.substring(0, stack_name_length) is options.stack_name
+#         instance_ids.push instance_id
+#    console.log instance_ids
+#    instances = (yield get_instances_addresses instance_ids)
+    instances = (yield get_instances_addresses peter-test)
+    console.log instances
+    #instances_addresses = instance.state.PrivateIpAddresses for instance in instances
 #    instances = yield upload_ssh_keys params
-#    instances_addresses = instance.state.PrivateIpAddresses for instance in instances
 #
 #    #---------------------
 #    # SSH into Cluster Instances
