@@ -16,7 +16,7 @@ build_template:[
     flag: "-p"
   }
   {
-    name: "unit"
+    name: "units"
     flag: "-u"
     type: "object"
   }

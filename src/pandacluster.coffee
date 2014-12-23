@@ -12,7 +12,8 @@ resolve_path = (x...) -> resolve(x...)    # Avoids confusion with "resolve" of p
 {parse} = require "c50n"                  # .cson file parsing
 
 https = require "https"
-{lift} = require "when"                # Awesome promise library
+{promise, lift} = require "when"                # Awesome promise library
+{liftAll} = require "when/node"
 node_lift = (require "when/node").lift
 async = (require "when/generator").lift   # Makes resuable generators.
 
@@ -44,6 +45,9 @@ get_body = (response) ->
       resolve data
     .on "error", (error) ->
       resolve error
+
+# Wrapper for https call to etcd's discovery API.
+get_discovery_url = -> yield get_body( yield https_get( "https://discovery.etcd.io/new"))
 
 
 # Pulls the most recent AWS CloudFormation template from CoreOS.
@@ -91,24 +95,23 @@ add_unit = (cloud_config, unit) ->
 # Configure the AWS object for account access.
 set_aws_creds = (creds) ->
   return {
-    accessKeyId: credentials.id
-    secretAccessKey: credentials.key
-    region: credentials.region
+    accessKeyId: creds.id
+    secretAccessKey: creds.key
+    region: creds.region
     sslEnabled: true
   }
 
 # Confirm that the named SSH key exists in your AWS account.
 validate_key_pair = (key_pair, creds) ->
   AWS.config = set_aws_creds creds
-  describe_key_pairs = node_lift (new AWS.EC2()).describeKeyPairs
+  describeKeyPairs = node_lift ((new AWS.EC2()).describeKeyPairs)
 
-  describe_key_pairs {}
+  describeKeyPairs {}
   .then (data) ->
     names = []
-    for key in data.KeyPairs
-      names.push key.KeyName
+    names.push key.KeyName    for key in data.KeyPairs
 
-    if names.indexOf(key_pair) == -1
+    if key_pair not in names
       throw "\nError: This AWS account does not have a key pair named \"#{key_pair}\".\n\n"
 
   .catch (err) ->
@@ -119,24 +122,24 @@ validate_key_pair = (key_pair, creds) ->
 # Create a CoreOS cluster using the AWS account information that has been gathered.
 create_cluster = (params, creds) ->
   AWS.config = set_aws_creds creds
-  create_stack = node_lift (new AWS.CloudFormation()).createStack
+  cloudformation = liftAll (new AWS.CloudFormation())
 
-  create_stack params
-  .then (data) ->
+  cloudformation.createStack params
+  .on (data) ->
     process.stdout.write "\nSuccess!!  Cluster formation is in progress.\n"
-  .catch (err) ->
+  .on (err) ->
     throw "\nApologies. Cluster formation has failed.\n\n#{err}\n"
 
 
 # Destroy a CoreOS cluster using the AWS account information that has been gathered.
 destroy_cluster = (params) ->
   AWS.config = set_aws_creds creds
-  delete_stack = node_lift (new AWS.CloudFormation()).deleteStack
+  cloudformation = liftAll (new AWS.CloudFormation())
 
-  delete_stack params
-  .then (data) ->
+  cloudformation.deleteStack params
+  .on (data) ->
     process.stdout.write "\nSuccess!!  Cluster destruction is in progress.\n"
-  .catch (err) ->
+  .on (err) ->
     throw "\nApologies. Cluster destruction has failed.\n\n#{err}\n"
 
 #===============================
@@ -147,7 +150,7 @@ module.exports =
   # This method builds an AWS CloudFormation template by augmenting the official
   # ones released by CoreOS.
   build_template: async (options) ->
-    console.log options
+
     # Provide the default for the template "write_path", if needed.
     options.write_path = "template.json" unless options.write_path?
 
@@ -179,7 +182,7 @@ module.exports =
   # This method creates and starts a CoreOS cluster.
   create: async (credentials, options) ->
     credentials.region = options.region or credentials.region
-
+    console.log options
     # Build the "params" object that is used directly by the "createStack" method.
     params = {}
     params.StackName = options.stack_name
@@ -209,12 +212,11 @@ module.exports =
 
       # DiscoveryURL - Grab a randomized URL from etcd's free discovery service.
       "ParameterKey": "DiscoveryURL"
-      "ParameterValue":
-        yield get_body( yield https_get( "https://discovery.etcd.io/new"))
+      "ParameterValue": get_discovery_url()
 
       # KeyPair
       "ParameterKey": "KeyPair"
-      "ParameterValue": yield lift( validate_key_pair( options.key_pair, credentials))
+      "ParameterValue": yield validate_key_pair( options.key_pair, credentials)
 
       # AdvertisedIPAddress - uses default "private", TODO: Add this option
       # AllowSSHFrom        - uses default "everywhere", TODO: Add this option
@@ -224,7 +226,7 @@ module.exports =
     # Access AWS
     #---------------------
     # With everything in place, we may finally make a call to Amazon's API.
-    yield lift( create_cluster( params, credentials))
+    yield create_cluster( params, credentials)
 
 
 
@@ -243,4 +245,4 @@ module.exports =
     # Access AWS
     #---------------------
     # With everything in place, we may finally make a call to Amazon's API.
-    yield lift( destroy_cluster( params, credentials))
+    yield destroy_cluster( params, credentials)

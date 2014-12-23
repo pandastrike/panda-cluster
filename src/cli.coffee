@@ -20,29 +20,29 @@ PC = require "./pandacluster"             # Access PandaCluster!!
 #===============================================================================
 # Helper Fucntions
 #===============================================================================
+# Wrap parseInt - hardcode the radix at 10 to avoid confusion
+# See: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/parseInt
+is_integer = (value) -> parseInt(value, 10) != NaN
+
 # Output an Info Blurb and optional message.
 usage = (entry, message) ->
   if message?
     process.stderr.write "#{message}\n"
 
-  process.stderr.write( read( resolve( __dirname, "..", "doc", entry ) ) )
-  process.exit -1
+  throw read( resolve( __dirname, "..", "doc", entry ) )
 
 # Accept only the allowed values for flags that take an enumerated type.
 allow_only = (allowed_values, value, flag) ->
-  if allowed_values.indexOf(value) == -1
-    process.stderr.write "\nError: Only Allowed Values May Be Specified For Flag: #{flag}\n\n"
-    process.exit -1
+  if value not in allowed_values
+    throw "\nError: Only Allowed Values May Be Specified For Flag: #{flag}\n\n"
 
 # Accept only integers within the accepted range, inclusive.
 allow_between = (min, max, value, flag) ->
-  if parseInt(value, 10) == NaN
-    process.stderr.write "\nError: Value Must Be An Integer For Flag: #{flag}\n\n"
-    process.exit -1
+  unless is_integer value
+    throw "\nError: Value Must Be An Integer For Flag: #{flag}\n\n"
 
-  if min <= value <= max
-    process.stderr.write "\nError: Value Is Outside Allowed Range For Flag: #{flag}\n\n"
-    process.exit -1
+  unless min <= value <= max
+    throw "\nError: Value Is Outside Allowed Range For Flag: #{flag}\n\n"
 
 # Parse the arguments passed to a sub-command.  Construct an "options" object to pass to the main library.
 parse_cli = (command, argv) ->
