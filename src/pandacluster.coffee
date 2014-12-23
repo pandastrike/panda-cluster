@@ -148,26 +148,6 @@ destroy_cluster = (params) ->
         process.exit -1
 
 
-# Retrieve InstanceIds for each member of the CloudFormation cluster
-get_stack_resources = (stack_name) ->
-  promise (resolve, reject) ->
-    cloudformation = new AWS.CloudFormation()
-    cloudformation.describeStackResources {StackName: stack_name}, (err, data) ->
-      unless err
-        instances = data.StackResources
-        if instances.length == 0
-          process.stderr.write "\nError:  Resources for stack #{stack_name} is empty.\n"
-          process.exit -1
-        else
-          resolve instances
-      else
-        process.stderr.write "\nApologies. Cluster describeStackResources has failed.\n\n"
-        process.stderr.write "#{err}\n\n"
-        process.exit -1
-
-
-# Retrieves instances (and their IP addresses) based on InstanceIds from get_stack_resources
-
 #get_instances_addresses = (stack_name) ->
 #  promise (resolve, reject) ->
 #    ec2 = new AWS.EC2()
