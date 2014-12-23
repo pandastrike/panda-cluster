@@ -168,14 +168,14 @@ destroy_cluster = (params) ->
 #        process.exit -1
 
 get_instances_addresses = async (stack_name) ->
-  ec2 = (new AWS.EC2()).lift
+  ec2 = liftAll (new AWS.EC2())
   params =
     Filters:
       Name: "tag:aws:cloudformation:stack-name"
       Values: [stack_name]
   try
-    http_response = yield ec2.describeInstances params
-    console.log "my data: ", http_response
+    {data} = yield ec2.describeInstances params
+    console.log "my data: ", error, data
     public_addresses = []
     for reservation in data.Reservations
       for instance in reservation.Instances
@@ -191,32 +191,30 @@ get_instances_addresses = async (stack_name) ->
     process.exit -1
 
 # Read SSH public key files on local machine
-read_keys_from_local = (ssh_file_path) ->
-  call ->
-    decoder = new StringDecoder('utf8')
-    ssh_keys = []
-    # TODO: handle multiple files
+read_keys_from_local = async (ssh_file_path) ->
+  decoder = new StringDecoder('utf8')
+  ssh_keys = []
+  # TODO: handle multiple files
+  try
+    ssh_file_buffer = yield readFile ssh_file_path
+    ssh_file_string = decoder.write ssh_file_buffer
+    ssh_keys.push ssh_file_string
+  catch error
+    console.log "Error occured reading SSH public key file: #{error}"
+    process.exit -1
+  return ssh_keys
+
+# Write SSH public key file to cluster instances
+write_authorized_hosts = async (contents, path) ->
+  ssh_keys = []
+  for file in options.files
     try
-      ssh_file_buffer = yield readFile ssh_file_path
-      ssh_file_string = decoder.write ssh_file_buffer
-      ssh_keys.push ssh_file_string
+      ssh_file = yield writeFile( resolve_path( process.cwd(), file))
+      ssh_keys.push ssh_file
     catch error
       console.log "Error occured reading SSH public key file: #{error}"
       process.exit -1
-    return ssh_keys
-
-# Write SSH public key file to cluster instances
-write_authorized_hosts = (contents, path) ->
-  call ->
-    ssh_keys = []
-    for file in options.files
-      try
-        ssh_file = yield writeFile( resolve_path( process.cwd(), file))
-        ssh_keys.push ssh_file
-      catch error
-        console.log "Error occured reading SSH public key file: #{error}"
-        process.exit -1
-    return true
+  return true
 
 # Download SSH public keys to given IP addresses
 # Default location downloaded to localhost: /tmp/pandacluster_authorized_hosts
