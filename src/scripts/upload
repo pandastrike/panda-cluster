@@ -1,14 +1,15 @@
-#!/bin/bash
-
 # This Bash script adds SSH public keys to authorized_hosts for given IP addresses
 # $1 = List of CloudFormation instances private IP addresses
 # $2 = String file of SSH public keys
+echo "beginning to upload keys"
 $2=${VARIABLE:-/tmp/pandacluster_authorized_hosts}
 
 for address in $1 #FIXME: figure out how bash handles javascript string array input
 do
+  echo "beginning sshing"
   ssh $1 /usr/bin/bash << EOF
     scp $2 $1:~/.ssh/authorized_hosts
+    echo "done scping"
   EOF
 done
 
