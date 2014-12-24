@@ -1,8 +1,19 @@
 -----------------------------------------------------------------
-Usage: pandacluster destroy CLUSTER_NAME
+Usage: pandacluster destroy -n CLUSTER_NAME
 -----------------------------------------------------------------
 Follow any command with "help" for more information.
 
 Terminates the specified CoreOS cluster on Amazon's EC2 cloud service and deletes
-its cloud stack.  This sub-command is pretty straight-forward and takes no options
- other than the target name.
+its cloud stack.
+
+Required:
+  -n  Name of cluster. Alpha-numeric string of at most 255 characters.
+
+--------------------------------------------------------------------------------
+Optional:
+    -r  AWS Region.  Your default region is set in the PandaCluster dotfile, but you
+        may temporarily override that region for this command.
+
+        Allowed Values: "ap-northeast-1", "ap-southeast-1", "ap-southeast-2",
+        "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1",
+        "us-west-2"
