@@ -5,14 +5,16 @@
 #====================
 # Modules
 #====================
+https = require "https"
 {resolve} = require "path"
 resolve_path = (x...) -> resolve(x...)    # Avoids confusion with "resolve" of promise
 
+# In-House Libraries
 {read, write} = require "fairmont"        # Easy file read/write
 {parse} = require "c50n"                  # .cson file parsing
 
-https = require "https"
-{promise, lift} = require "when"                # Awesome promise library
+# When Library
+{promise, lift} = require "when"          # Awesome promise library
 {liftAll} = require "when/node"
 node_lift = (require "when/node").lift
 async = (require "when/generator").lift   # Makes resuable generators.
@@ -24,6 +26,10 @@ AWS = require "aws-sdk"                   # Access AWS API
 #================================
 # Helper Functions
 #================================
+# Allow "when" to lift AWS module functions, which are non-standard.
+lift_object = (object, method) ->
+  node_lift method.bind object
+
 # Promise wrapper around Node's https module. Makes GET calls into promises.
 https_get = (url) ->
   promise (resolve, reject) ->
@@ -47,7 +53,7 @@ get_body = (response) ->
       resolve error
 
 # Wrapper for https call to etcd's discovery API.
-get_discovery_url = -> yield get_body( yield https_get( "https://discovery.etcd.io/new"))
+get_discovery_url = async () -> yield get_body( yield https_get( "https://discovery.etcd.io/new"))
 
 
 # Pulls the most recent AWS CloudFormation template from CoreOS.
@@ -102,44 +108,52 @@ set_aws_creds = (creds) ->
   }
 
 # Confirm that the named SSH key exists in your AWS account.
-validate_key_pair = (key_pair, creds) ->
+validate_key_pair = async (key_pair, creds) ->
   AWS.config = set_aws_creds creds
-  describeKeyPairs = node_lift ((new AWS.EC2()).describeKeyPairs)
+  ec2 = new AWS.EC2()
+  describe_key_pairs = lift_object ec2, ec2.describeKeyPairs
 
-  describeKeyPairs {}
-  .then (data) ->
+  try
+    data = yield describe_key_pairs {}
     names = []
     names.push key.KeyName    for key in data.KeyPairs
 
     if key_pair not in names
       throw "\nError: This AWS account does not have a key pair named \"#{key_pair}\".\n\n"
+    return true # validated
 
-  .catch (err) ->
-      throw "\nError:  Unable to validate SSH key.\n #{err}\n\n"
+  catch err
+    throw "\nError:  Unable to validate SSH key.\n #{err}\n\n"
 
 
 
 # Create a CoreOS cluster using the AWS account information that has been gathered.
-create_cluster = (params, creds) ->
+create_cluster = async (params, creds) ->
   AWS.config = set_aws_creds creds
-  cloudformation = liftAll (new AWS.CloudFormation())
+  cf = new AWS.CloudFormation()
+  create_stack = lift_object cf, cf.createStack
 
-  cloudformation.createStack params
-  .on (data) ->
+  try
+    data = yield create_stack params
     process.stdout.write "\nSuccess!!  Cluster formation is in progress.\n"
-  .on (err) ->
+    return true
+
+  catch err
     throw "\nApologies. Cluster formation has failed.\n\n#{err}\n"
 
 
 # Destroy a CoreOS cluster using the AWS account information that has been gathered.
-destroy_cluster = (params) ->
+destroy_cluster = async (params, creds) ->
   AWS.config = set_aws_creds creds
-  cloudformation = liftAll (new AWS.CloudFormation())
+  cf = new AWS.CloudFormation()
+  delete_stack = lift_object cf, cf.deleteStack
 
-  cloudformation.deleteStack params
-  .on (data) ->
+  try
+    data = yield delete_stack params
     process.stdout.write "\nSuccess!!  Cluster destruction is in progress.\n"
-  .on (err) ->
+    return true
+
+  catch err
     throw "\nApologies. Cluster destruction has failed.\n\n#{err}\n"
 
 #===============================
@@ -182,7 +196,6 @@ module.exports =
   # This method creates and starts a CoreOS cluster.
   create: async (credentials, options) ->
     credentials.region = options.region or credentials.region
-    console.log options
     # Build the "params" object that is used directly by the "createStack" method.
     params = {}
     params.StackName = options.stack_name
@@ -202,21 +215,26 @@ module.exports =
     # template file.  We will now fill out the map as specified or with defaults.
     #---------------------------------------------------------------------------
     params.Parameters = [
-      # InstanceType
-      "ParameterKey": "InstanceType"
-      "ParameterValue": options.instance_type or "m3.medium"
 
-      # ClusterSize
-      "ParameterKey": "ClusterSize"
-      "ParameterValue": options.cluster_size or "3"
+      { # InstanceType
+        "ParameterKey": "InstanceType"
+        "ParameterValue": options.instance_type or "m3.medium"
+      }
 
-      # DiscoveryURL - Grab a randomized URL from etcd's free discovery service.
-      "ParameterKey": "DiscoveryURL"
-      "ParameterValue": get_discovery_url()
+      { # ClusterSize
+        "ParameterKey": "ClusterSize"
+        "ParameterValue": options.cluster_size or "3"
+      }
 
-      # KeyPair
-      "ParameterKey": "KeyPair"
-      "ParameterValue": yield validate_key_pair( options.key_pair, credentials)
+      { # DiscoveryURL - Grab a randomized URL from etcd's free discovery service.
+        "ParameterKey": "DiscoveryURL"
+        "ParameterValue": yield get_discovery_url()
+      }
+
+      { # KeyPair
+        "ParameterKey": "KeyPair"
+        "ParameterValue": options.key_pair if yield validate_key_pair( options.key_pair, credentials)
+      }
 
       # AdvertisedIPAddress - uses default "private", TODO: Add this option
       # AllowSSHFrom        - uses default "everywhere", TODO: Add this option
