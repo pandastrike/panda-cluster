@@ -6,13 +6,13 @@
     runtime: "true"
     command: "start"
     enable: "yes"
-    content: "../units/docker-tcp.service"
+    content: "units/docker-tcp.service"
   },
   {
     name: "enable-docker-tcp.service"
     runtime: "true"
     command: "start"
-    content: "../units/docker-tcp.service"
+    content: "units/docker-tcp.service"
   },
 
   # These two add ephemeral storage to each machine in the cluster and mount
@@ -23,11 +23,12 @@
     name: "format-ephemeral.service"
     runtime: "true"
     command: "start"
+    content: "units/format-ephemeral.service"
   },
   {
     name: "var-lib-docker.mount"
     runtime: "true"
     command: "start"
-
+    content: "units/var-lib-docker.mount"
   }
 ]
