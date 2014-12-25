@@ -3,30 +3,24 @@ amen = require "amen"
 cli = require "./src/cli"
 nock = require "nock"
 
+# TODO: setup option to record or play, but lower priority
+# decide whether we want to run real requests or not
+#should_record = false
+#argv = require('minimist')(process.argv.slice(2))
+#if argv.record? is true
+#  should_record = true
+
 nock.recorder.rec
   dont_print: true
   output_objects: true
 nock_calls = nock.recorder.play()
-{readFile, writeFile} = (liftAll require "fs")
+{read_file, write_file} = require "./file-rw"
 
-read_file "./json-data/create-cluster/success.json"
-write_file "./json-data/create-cluster/success.json", nock_recording
-
-read_file = (path) ->
-  try
-    yield readFile path
-  catch error
-    console.log "Error writing #{path}: #{error}"
-    assert fail
-
-write_file = (path, data) ->
-  try
-    yield writeFile path, data
-  catch error
-    console.log "Error writing #{path}: #{error}"
-    assert fail
-
+assert true, read_file "./json/create-cluster/success.json"
+assert true, write_file "./json/create-cluster/success.json", nock_recording
 nock.load path
+
+
 
 amen.describe "My simple test suite", (context) ->
 
