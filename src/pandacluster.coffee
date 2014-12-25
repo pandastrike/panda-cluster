@@ -14,11 +14,11 @@ resolve_path = (x...) -> resolve(x...)    # Avoids confusion with "resolve" of p
 https = require "https"
 {promise} = require "when"                # Awesome promise library
 async = (require "when/generator").lift   # Makes resuable generators.
+node_lift = (require "when/node").lift
 
 {exec} = require "shelljs"                # Access to commandline
 
 {liftAll} = require "when/node"                 # ES6 styled way for file IO
-{call} = require "when/generator"
 {readFile, writeFile} = (liftAll require "fs")
 StringDecoder = require('string_decoder').StringDecoder   # Convert SSH file stream to string
 
@@ -148,47 +148,36 @@ destroy_cluster = (params) ->
         process.exit -1
 
 
-#get_instances_addresses = (stack_name) ->
-#  promise (resolve, reject) ->
-#    ec2 = new AWS.EC2()
-#    ec2.describeInstances {Filters: [{ Name: "tag:aws:cloudformation:stack-name", Values: [stack_name] }]}, (err, data) ->
-#      unless err
-#        public_addresses = []
-#        for reservation in data.Reservations
-#          for instance in reservation.Instances
-#            public_addresses.push instance.PublicDnsName
-#        if public_addresses.length == 0
-#          process.stderr.write "\nError: No instances match StackName\"#{stack_name}\".\n\n"
-#          process.exit -1
-#        else
-#          resolve public_addresses
-#      else
-#        process.stderr.write "\nError:  Unable to request describeInstances from EC2 .\n"
-#        process.stderr.write "#{err}\n\n"
-#        process.exit -1
+lift_object = (object, method) ->
+  node_lift method.bind object
 
+# Retrieves all instances with "stack-name" matching the passed in argument.
+# Since the ec2 object is stateful, we need to 
 get_instances_addresses = async (stack_name) ->
   ec2 = liftAll (new AWS.EC2())
+  describeInstances = lift_object ec2, ec2.describeInstances
+
   params =
-    Filters:
+    Filters: [
       Name: "tag:aws:cloudformation:stack-name"
       Values: [stack_name]
+    ]
   try
-    {data} = yield ec2.describeInstances params
-    console.log "my data: ", error, data
+    data = yield describeInstances params
+    # corral each instance's public DNS into an array
     public_addresses = []
     for reservation in data.Reservations
       for instance in reservation.Instances
         public_addresses.push instance.PublicDnsName
     if public_addresses.length == 0
-      process.stderr.write "\nError: No instances match StackName\"#{stack_name}\".\n\n"
+      process.stderr.write "\nError: No instances with 'stack-name'\"#{stack_name}\".\n\n"
       process.exit -1
-    else
-      return data
+    data
   catch error
-    process.stderr.write "\nError:  Unable to request describeInstances from EC2 .\n"
-    process.stderr.write "#{error}\n\n"
+    #throw "\nError:  Unable to request describeInstances from EC2 .\n #{error}\n\n"
+    process.stderr.write "\nError:  Unable to request describeInstances from EC2 .\n #{error}\n\n"
     process.exit -1
+
 
 # Read SSH public key files on local machine
 read_keys_from_local = async (ssh_file_path) ->
@@ -370,7 +359,6 @@ module.exports =
     # Access AWS
     #---------------------
     public_addresses = (yield get_instances_addresses options.stack_name)
-    console.log "public addresses: #{public_addresses}"
 
     #---------------------
     # SSH into Cluster Instances
