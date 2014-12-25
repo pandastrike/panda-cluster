@@ -1,8 +1,34 @@
+assert = require "assert"
 amen = require "amen"
 cli = require "./src/cli"
-async = (require "when/generator").lift
+nock = require "nock"
 
-amen.describe "My simple test suite", async (context) ->
+nock.recorder.rec
+  dont_print: true
+  output_objects: true
+nock_calls = nock.recorder.play()
+{readFile, writeFile} = (liftAll require "fs")
+
+read_file "./json-data/create-cluster/success.json"
+write_file "./json-data/create-cluster/success.json", nock_recording
+
+read_file = (path) ->
+  try
+    yield readFile path
+  catch error
+    console.log "Error writing #{path}: #{error}"
+    assert fail
+
+write_file = (path, data) ->
+  try
+    yield writeFile path, data
+  catch error
+    console.log "Error writing #{path}: #{error}"
+    assert fail
+
+nock.load path
+
+amen.describe "My simple test suite", (context) ->
 
   context.describe "My synchronous tests", (context) ->
 
