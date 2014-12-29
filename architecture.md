@@ -3,7 +3,7 @@ architecture.md
 api-guide.md
 unit-guide.md
 
-main.coffee
+main.coffee (?)
 
 # architecture
 ------------------
@@ -11,7 +11,7 @@ main.coffee
 2. `src/cli.coffee` parses command and arguments, validating them against `argument_definitions.cson`.
 3. `src/cli.coffee` is also hard-coded to read in the user's AWS credentials from `~/.pandacluster.cson`.
 3. `src/cli.coffee` passes the arguments and AWS credentials to `src/pandacluster.coffee`.
-4. `src/pandacluster.coffee` will either make a call to AWS API or pull CoreOS CloudFormation templates, using the URLs stored in `src/templates.cson`.
+4. `src/pandacluster.coffee` will fulfill the user command by either making a call to AWS API or pull CoreOS CloudFormation templates, using the URLs stored in `src/templates.cson`.
 
 
 ## bin
@@ -23,7 +23,7 @@ main.coffee
 ##  doc
 ------------------
 
-Contains the --help text provided for the CLI commands as used by "src/cli.coffee"
+Contains the --help text provided for the CLI commands as used by `src/cli.coffee`.
 
 1. build_template
 2. create
@@ -52,6 +52,8 @@ Contains the --help text provided for the CLI commands as used by "src/cli.coffe
 
 ## units
 ------------------
+
+Sample files for CoreOS systemd configuration.  The `build_template` method in `src/pandacluster.coffee` takes in a `units` .cson filepath option that references .service files.  These systemd unit files with .service extensions run cron-like processes.
 
 1. docker-tcp.service
 2. enable-docker-tcp.service
