@@ -55,8 +55,14 @@ Contains the --help text provided for the CLI commands as used by `src/cli.coffe
 
 Sample files for CoreOS systemd configuration.  The `build_template` method in `src/pandacluster.coffee` takes in a `units` .cson filepath option that references .service files.  These systemd unit files with .service extensions run cron-like processes.
 
-1. docker-tcp.service
-2. enable-docker-tcp.service
-3. format-ephemeral.service
-4. unit-config.cson
+
+1. unit-config.cson
+  - # TODO
+2. docker-tcp.service
+  - Exposes Docker by specifying on which socket Docker should listen to.  Does not actually run.
+4. enable-docker-tcp.service
+  - Runs the docker-tcp.service.
+4. format-ephemeral.service
+  - Prepares the ephemeral drive for mounting by wiping the volume with wipefs and then formatting with mkfs.btrfs.
 5. var-lib-docker.mount
+  - Mounts the formatted ephemeral drive to /var/lib/docker.mount
