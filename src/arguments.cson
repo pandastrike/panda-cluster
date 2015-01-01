@@ -4,30 +4,16 @@
 # This CSON object specifies arugments for each sub-command of the Command-Line Interface.
 # Each object returns an array of objects define values needed by the parsing function.
 
-
-build_template:[
+create:[
   {
-    name:"channel"
+    name: "channel"
     flag: "-c"
     allowed_values: ["alpha", "beta", "stable"]
   }
   {
-    name:"write_path"
-    flag: "-p"
+    name: "skydns"
+    flag: "-d"
   }
-  {
-    name: "units"
-    flag: "-u"
-    type: "object"
-  }
-  {
-    name: "virtualization"
-    flag: "-v"
-    allowed_values: ["pv", "hvm"]
-  }
-]
-
-create:[
   {
     name: "instance_type"
     flag: "-i"
@@ -40,6 +26,11 @@ create:[
     name: "key_pair"
     flag: "-k"
     required: true
+  }
+  {
+    name: "mount_docker"
+    flag: "-m"
+    allowed_values: ["true"]
   }
   {
     name: "stack_name"
@@ -60,8 +51,13 @@ create:[
     max: 12
   }
   {
-    name: "template_path"
-    flag: "-t"
+    name: "cluster_url"
+    flag: "-u"
+  }
+  {
+    name: "virtualization"
+    flag: "-v"
+    allowed_values: ["pv", "hvm"]
   }
 ]
 

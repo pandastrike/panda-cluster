@@ -12,9 +12,12 @@
 {resolve} = require "path"
 {read, write, remove} = require "fairmont" # Awesome utility functions.
 {parse} = require "c50n"                   # Awesome .cson file parsing
-{pluck, where} = require "underscore"      # Awesome manipulations in the functional style.
 
-PC = require "./pandacluster"             # Access PandaCluster!!
+# Awesome manipulations in the functional style.
+{pluck, where, flatten} = require "underscore"
+
+# Access PandaCluster!!
+PC = require "./pandacluster"
 
 
 #===============================================================================
@@ -49,11 +52,12 @@ parse_cli = (command, argv) ->
   # Deliver an info blurb if neccessary.
   usage command   if argv[0] == "-h" or argv[0] == "help"
 
-  # Begin constructing the "options" object.
-  options = {}
+  # Begin constructing the "options" object by pulling persistent configuration data
+  # from the CSON file in the user's $HOME directory.
+  options = parse( read( resolve("#{process.env.HOME}/.pandacluster.cson")))
 
   # Extract flag data from the argument definition for this sub-command.
-  definitions = parse( read( resolve(  __dirname, "argument_definitions.cson")))
+  definitions = parse( read( resolve(  __dirname, "arguments.cson")))
   cmd_def = definitions[command]  # Produces an array of objects describing this single sub-command.
   flags = pluck cmd_def, "flag"
   required_flags = pluck( where( cmd_def, {required: true}), "flag" )
@@ -67,7 +71,7 @@ parse_cli = (command, argv) ->
     if argv.length == 1
       usage command, "\nError: Valid Flag Provided But Not Defined: #{argv[0]}\n"
 
-    # Compare the argument its defintion.
+    # Validate the argument against its defintion.
     {name, type, required, allowed_values, min, max} = cmd_def[ flags.indexOf(argv[0]) ]
 
     allow_only( allowed_values, argv[1], argv[0])  if allowed_values?
@@ -75,10 +79,7 @@ parse_cli = (command, argv) ->
     remove( required_flags, argv[0])               if required? == true
 
     # Add data to the "options" object.
-    unless type?
-      options[name] = argv[1]
-    else if type == "object"
-      options[name] = parse( read( argv[1]))
+    options[name] = argv[1]
 
     # Delete these arguments.
     argv = argv[2..]
@@ -91,6 +92,20 @@ parse_cli = (command, argv) ->
   return options
 
 
+# Based on the above parsing, we must finalize the array "options.units".  This
+# variable is an array of objects detailing which services are launched during
+# cluster formation.  The list of all available units is in "src/services/units.cson"
+gather_units = (options) ->
+  unit_hash = parse( read( resolve(__dirname, "services/units.cson")))
+
+  # Build array.
+  options.units = []
+  for key of unit_hash
+    options.units.push unit_hash[key]   if options[key]?
+
+  # Alleviate possible array nesting with shallow flattening.
+  return flatten options.units, true
+
 #===============================================================================
 # Main - Top-Level Command-Line Interface
 #===============================================================================
@@ -101,20 +116,15 @@ argv = argv[2..]
 if argv.length == 0 or argv[0] == "-h" or argv[0] == "help"
   usage "main"
 
-# Grab credentials for the AWS account from the PandaCluster dotfile.
-credentials = parse( read( resolve("#{process.env.HOME}/.pandacluster.cson"))).aws
-
 # Now, look for the specified sub-command.
 switch argv[0]
-  when "build-template"
-    options = parse_cli "build_template", argv[1..]
-    PC.build_template options
   when "create"
     options = parse_cli "create", argv[1..]
-    PC.create credentials, options
+    options.units = gather_units options
+    PC.create options
   when "destroy"
     options = parse_cli "destroy", argv[1..]
-    PC.destroy credentials, options
+    PC.destroy options
   else
     # When the command cannot be identified, display the help guide.
     usage "main", "\nError: Command Not Found: #{argv[0]} \n"

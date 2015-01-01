@@ -88,7 +88,7 @@ add_unit = (cloud_config, unit) ->
   # For "content", we draw from a unit-file maintained in a separate file. Add
   # eight spaces to the begining of each line (4 indentations) and follow each
   # line with an explicit new-line character.
-  content = read( resolve_path( unit.content))
+  content = read( resolve_path( __dirname, "services/#{unit.name}"))
   content = content.split "\n"
 
   while content.length > 0
@@ -96,6 +96,36 @@ add_unit = (cloud_config, unit) ->
     content.shift()
 
   return cloud_config
+
+
+
+# Build an AWS CloudFormation template by augmenting the official ones released
+# by CoreOS.  Return a JSON string.
+build_template = async (options) ->
+  # Pull official CoreOS template as a JSON object.
+  template_object = yield pull_cloud_template options
+
+  # Isolate the cloud-config array within the JSON object.
+  user_data = template_object.Resources.CoreOSServerLaunchConfig.Properties.UserData
+  cloud_config = user_data["Fn::Base64"]["Fn::Join"][1]
+
+  # Add the specified units to the cloud-config section.
+  unless options.units == []
+    for x in options.units
+      cloud_config = add_unit cloud_config, x
+
+  # Add the specified public keys.  We must be careful with indentation formatting.
+  unless options.public_keys == []
+    cloud_config.push "ssh_authorized_keys: \n"
+    for x in options.public_keys
+      cloud_config.push "  - #{x}\n"
+
+  # Place this array back into the JSON object.  Construction complete.
+  user_data["Fn::Base64"]["Fn::Join"][1] = cloud_config
+  template_object.Resources.CoreOSServerLaunchConfig.Properties.UserData = user_data
+
+  # Return the JSON string.
+  return JSON.stringify template_object, null, "\t"
 
 
 # Configure the AWS object for account access.
@@ -106,6 +136,7 @@ set_aws_creds = (creds) ->
     region: creds.region
     sslEnabled: true
   }
+
 
 # Confirm that the named SSH key exists in your AWS account.
 validate_key_pair = async (key_pair, creds) ->
@@ -161,54 +192,16 @@ destroy_cluster = async (params, creds) ->
 #===============================
 module.exports =
 
-  # This method builds an AWS CloudFormation template by augmenting the official
-  # ones released by CoreOS.
-  build_template: async (options) ->
-
-    # Provide the default for the template "write_path", if needed.
-    options.write_path = "template.json" unless options.write_path?
-
-    # Pull official CoreOS template as a JSON object.
-    template_object = yield pull_cloud_template options
-
-    # Isolate the cloud-config array within the JSON object.
-    user_data = template_object.Resources.CoreOSServerLaunchConfig.Properties.UserData
-    cloud_config = user_data["Fn::Base64"]["Fn::Join"][1]
-
-    # Add the specified units to the cloud-config section.
-    if options.units?
-      for x in options.units
-        cloud_config = add_unit cloud_config, x
-
-    # Place this array back into the JSON object.  Construction complete.
-    user_data["Fn::Base64"]["Fn::Join"][1] = cloud_config
-    template_object.Resources.CoreOSServerLaunchConfig.Properties.UserData = user_data
-
-    # Return or write the JSON string to a file.
-    if options.write_path
-      write "#{process.cwd()}/#{options.write_path}", JSON.stringify( template_object, null, '\t' )
-      return
-    else
-      return JSON.stringify template_object
-
-
-
   # This method creates and starts a CoreOS cluster.
-  create: async (credentials, options) ->
+  create: async (options) ->
+    credentials = options.aws
     credentials.region = options.region or credentials.region
-    # Build the "params" object that is used directly by the "createStack" method.
+
+    # Build the "params" object that is used directly by the AWS "createStack" method.
     params = {}
     params.StackName = options.stack_name
     params.OnFailure = "DELETE"
-
-    #------------------------
-    # TemplateBody Paramter
-    #------------------------
-    # This object is drawn from either a specified JSON file or a basic default pulled from online.
-    if options.template_path?
-      params.TemplateBody = read( resolve_path( process.cwd(), options.template_path))
-    else
-      params.TemplateBody = yield @build_template {write_path: false}
+    params.TemplateBody = yield build_template options
 
     #---------------------------------------------------------------------------
     # Parameters is a map of key/values custom defined for this stack by the
@@ -252,7 +245,8 @@ module.exports =
 
 
   # This method stops and destroys a CoreOS cluster.
-  destroy: async (credentials, options) ->
+  destroy: async (options) ->
+    credentials = options.aws
     credentials.region = options.region or credentials.region
 
     # Build the "params" object that is used directly by the "createStack" method.

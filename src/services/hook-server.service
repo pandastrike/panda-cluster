@@ -1,0 +1,40 @@
+#===============================================================================
+# PandaCluster - Hook-Server
+#===============================================================================
+# This unit is part of the PandaHook project. It spins up a hook-server. A hook-
+# server triggers githooks, arbitrary scripts launched by git commands.
+
+
+[Unit]
+Description=Spin Up Hook-Server
+After=skydns.service
+
+[Service]
+TimeoutStartSec=0
+
+ExecStartPre=/usr/bin/echo "========================"
+ExecStartPre=/usr/bin/echo "  New Service Starting"
+ExecStartPre=/usr/bin/echo "========================"
+
+# Display this service's IP addresses.
+EnvironmentFile=/etc/environment
+ExecStartPre=/usr/bin/echo "Public IP Address: ${COREOS_PUBLIC_IPV4}"
+ExecStartPre=/usr/bin/echo "Private IP Address: ${COREOS_PRIVATE_IPV4}"
+
+
+# Pull Orca's Leader Docker Container.
+ExecStartPre=-/usr/bin/docker kill hook-server
+ExecStartPre=-/usr/bin/docker rm hook-server
+ExecStartPre=/usr/bin/docker pull pandastrike/coreos_hook_server
+
+
+# Deploy:  We need to overwrite the container's resolv.conf file so that it uses
+# SkyDNS instead of the cloud provider's DNS.  To point this container at
+# SkyDNS, we must first link it to the SkyDNS container.
+
+ExecStart=/usr/bin/docker run --name hook-server --link skydns:dns \
+  pandastrike/coreos_hook_server /bin/bash -c \
+  'echo "nameserver $DNS_PORT_53_TCP_ADDR" > /etc/resolv.conf'
+
+[Install]
+WantedBy=multi-user.target
