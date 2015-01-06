@@ -22,6 +22,7 @@ PandaCluster is available as an npm package.  How you install PandaCluster depen
   cd ~/.nvm
   git checkout `git describe --abbrev=0 --tags`
   source ~/.nvm/nvm.sh && nvm install 0.11
+  nvm use 0.11
   ```
 
   Compiling the CoffeeScript requires the latest development branch of version 1.8.
@@ -51,8 +52,9 @@ This places the PandaCluster Node module into your project and in your `package.
 The command-line tool is accessed via several sub-commands.  Information is available at any time by placing "help" or "-h" after most commands.  Here is a list of currently available sub-commands.
 
   ```
-  create    Creates a CoreOS cluster by allocating servers from AWS
-  destroy   Terminates the specified CoreOS cluster
+  build_template  Builds an AWS CloudFormation template using images released by CoreOS
+  create          Creates a CoreOS cluster by allocating servers from AWS
+  destroy         Terminates the specified CoreOS cluster
   ```
 
 ## API Guide
