@@ -50,6 +50,7 @@ allow_between = (min, max, value, flag) ->
 # Parse the arguments passed to a sub-command.  Construct an "options" object to pass to the main library.
 parse_cli = (command, argv) ->
   # Deliver an info blurb if neccessary.
+  console.log argv
   usage command   if argv[0] == "-h" or argv[0] == "help"
 
   # Begin constructing the "options" object by pulling persistent configuration data
