@@ -22,7 +22,7 @@ ExecStartPre=/usr/bin/echo "Public IP Address: ${COREOS_PUBLIC_IPV4}"
 ExecStartPre=/usr/bin/echo "Private IP Address: ${COREOS_PRIVATE_IPV4}"
 
 
-# Pull Orca's Leader Docker Container.
+# Pull The Hook-Server Docker Container.
 ExecStartPre=-/usr/bin/docker kill hook-server
 ExecStartPre=-/usr/bin/docker rm hook-server
 ExecStartPre=/usr/bin/docker pull pandastrike/coreos_hook_server
