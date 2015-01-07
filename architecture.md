@@ -13,6 +13,12 @@ main.coffee (?)
 3. `src/cli.coffee` passes the arguments and AWS credentials to `src/pandacluster.coffee`.
 4. `src/pandacluster.coffee` will fulfill the user command by either making a call to AWS API or pull CoreOS CloudFormation templates, using the URLs stored in `src/templates.cson`.
 
+## credential file
+------------------
+
+1. ~/.pandacluster.cson
+  - This is the where your AWS credentials are defined, and where PandaCluster will read from.
+  - It is also where you list public ssh keys to be uploaded onto the cluster as authorized keys. 
 
 ## bin
 ------------------
@@ -34,21 +40,19 @@ Contains the --help text provided for the CLI commands as used by `src/cli.coffe
 ------------------
 
 1. argument_definitions.cson
+  - This file specifies arguments for each CLI sub-command and is used as validation.
 2. cli.coffee
+  - This is a top-down script that will validate the command and its arguments against arguments.cson and piece together the arguments and credentials (from the ~/.pandacluster.cson) into an object that is passed to the appropriate command method in pandacluster.coffee.
 3. pandacluster.coffee
+  - Once receiving the arguments and credentials (and for the "create_cluster" command, public ssh keys), the pandacluster.coffee command will process the arguments as necessary and then send a request to the AWS CloudFormation API to create or destroy a cluster.
 4. templates.cson
+  - This CSON file specifies CoreOS cloud images for PV and HVM machines in stable, beta, and alpha releases.
 
 ## test
 ------------------
 
 1. create_cluster.coffee
-2. file_rw.coffee
-
-### test/json
-------------------
-
-1. create-cluster
-2. destroy-cluster
+2. destroy_cluster.coffee
 
 ## units
 ------------------

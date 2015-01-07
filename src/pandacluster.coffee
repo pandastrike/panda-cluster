@@ -170,7 +170,12 @@ create_cluster = async (params, creds) ->
     return true
 
   catch err
-    throw "\nApologies. Cluster formation has failed.\n\n#{err}\n"
+    res =
+      error: err
+    #throw stderr.write JSON.stringify(err)
+    #throw err
+    return err
+    #throw "\nApologies. Cluster formation has failed.\n\n#{err}\n"
 
 
 # Destroy a CoreOS cluster using the AWS account information that has been gathered.
@@ -237,7 +242,7 @@ module.exports =
     # Access AWS
     #---------------------
     # With everything in place, we may finally make a call to Amazon's API.
-    yield create_cluster( params, credentials)
+    return yield create_cluster( params, credentials)
 
 
 
