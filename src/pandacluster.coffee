@@ -167,15 +167,10 @@ create_cluster = async (params, creds) ->
   try
     data = yield create_stack params
     process.stdout.write "\nSuccess!!  Cluster formation is in progress.\n"
-    return true
+    return data
 
   catch err
-    res =
-      error: err
-    #throw stderr.write JSON.stringify(err)
-    #throw err
-    return err
-    #throw "\nApologies. Cluster formation has failed.\n\n#{err}\n"
+    throw "\nApologies. Cluster formation has failed.\n\n#{err}\n"
 
 
 # Destroy a CoreOS cluster using the AWS account information that has been gathered.
@@ -187,7 +182,7 @@ destroy_cluster = async (params, creds) ->
   try
     data = yield delete_stack params
     process.stdout.write "\nSuccess!!  Cluster destruction is in progress.\n"
-    return true
+    return data
 
   catch err
     throw "\nApologies. Cluster destruction has failed.\n\n#{err}\n"
@@ -262,4 +257,4 @@ module.exports =
     # Access AWS
     #---------------------
     # With everything in place, we may finally make a call to Amazon's API.
-    yield destroy_cluster( params, credentials)
+    return yield destroy_cluster( params, credentials)

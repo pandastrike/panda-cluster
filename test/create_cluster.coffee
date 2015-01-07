@@ -1,51 +1,36 @@
 assert = require "assert"
 {call} = require "when/generator"
-#require "../src/cli"
+{resolve} = require "path"
+{read} = require "fairmont"
+pandacluster = require "../src/pandacluster"
+cson = require "c50n"
 
 require 'shelljs/global'
+
+
+aws = cson.parse (read(resolve("#{process.env.HOME}/.pandacluster.cson")))
+options =
+  public_keys: aws.public_keys
+  stack_name: "peter-cli-test"
+  key_pair: "peter"
+  units: []
+  aws: aws.aws
 
 call ->
 
   try
-    res = yield (exec './bin/pandacluster create -n peter-cli-test -k peter')
+    res = yield pandacluster.create options
     console.log res
 
   catch error
     console.log error
 
+  try
+    #res = yield pandacluster.destroy options
+    console.log res
 
-#call ->
-#
-#  try
-#    res = yield (exec './bin/pandacluster destroy -n peter-cli-test -k peter')
-#    console.log res
-#
-#  catch error
-#    console.log error
-#
-#
-#call ->
-#
-#  try
-#    res = yield (exec './bin/pandacluster build_template -n peter-cli-test -k peter')
-#    console.log res
-#
-#  catch error
-#    console.log error
-
-
-    #call ->
-#
-#  try
-#    console.log "foobar"
-#    console.log "barfoo"
-#
-#    response = yield cli.parse_cli "create", ["-n", "peter-cli-test", "-k", "peter"]
-#    console.log response
-#    assert.equal 201, response.statusCode
-#
-#  catch error
-#    console.error error
+  catch error
+    console.log error
 
 
 
