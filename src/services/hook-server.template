@@ -35,6 +35,7 @@ ExecStartPre=/usr/bin/docker pull pandastrike/coreos_hook_server
 ExecStart=/usr/bin/docker run --name hook-server --link skydns:dns \
   pandastrike/coreos_hook_server /bin/bash -c \
   'echo "nameserver $DNS_PORT_53_TCP_ADDR" > /etc/resolv.conf'
+  {{ssh_keys}}
 
 [Install]
 WantedBy=multi-user.target

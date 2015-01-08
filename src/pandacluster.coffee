@@ -19,7 +19,7 @@ node_lift = (require "when/node").lift
 async = (require "when/generator").lift
 
 # ShellJS
-{exec} = require "shelljs"
+{exec, error} = require "shelljs"
 
 # Access AWS API
 AWS = require "aws-sdk"
@@ -28,6 +28,29 @@ AWS = require "aws-sdk"
 #================================
 # Helper Functions
 #================================
+# Build an error object to let the user know something went worng.
+build_error = (message, error) ->
+  error = new Error message
+  error.details = err    if err?
+  return error
+
+# Create a success object that reports data to user.
+build_success = (message, data, code) ->
+  return {
+    message: message
+    status: "success"
+    code: code          if code?
+    details: data       if data?
+  }
+
+# Create a version of ShellJS's "exec" command with built-in error handling.
+execute = (command) ->
+  exec command
+
+  if error()?
+    return build_error "ShellJS failed to execute shell command.", error()
+
+
 # Allow "when" to lift AWS module functions, which are non-standard.
 lift_object = (object, method) ->
   node_lift method.bind object
@@ -75,10 +98,14 @@ pull_cloud_template = async ({channel, virtualization}) ->
   template_store = parse( read( resolve( __dirname, "templates.cson")))
   template_url = template_store[channel][virtualization]
 
-  response = yield https_get template_url
-  template_object = JSON.parse (yield get_body response)
+  try
+    response = yield https_get template_url
+    template_object = JSON.parse (yield get_body response)
 
-  return template_object
+    return template_object
+
+  catch error
+    return build_error "Unable to access AWS template stores belonging to CoreOS", error
 
 # Add unit to the cloud-config section of the AWS template.
 add_unit = (cloud_config, unit) ->
@@ -111,30 +138,34 @@ add_unit = (cloud_config, unit) ->
 # Build an AWS CloudFormation template by augmenting the official ones released
 # by CoreOS.  Return a JSON string.
 build_template = async (options) ->
-  # Pull official CoreOS template as a JSON object.
-  template_object = yield pull_cloud_template options
+  try
+    # Pull official CoreOS template as a JSON object.
+    template_object = yield pull_cloud_template options
 
-  # Isolate the cloud-config array within the JSON object.
-  user_data = template_object.Resources.CoreOSServerLaunchConfig.Properties.UserData
-  cloud_config = user_data["Fn::Base64"]["Fn::Join"][1]
+    # Isolate the cloud-config array within the JSON object.
+    user_data = template_object.Resources.CoreOSServerLaunchConfig.Properties.UserData
+    cloud_config = user_data["Fn::Base64"]["Fn::Join"][1]
 
-  # Add the specified units to the cloud-config section.
-  unless options.formation_units == []
-    for x in options.formation_units
-      cloud_config = add_unit cloud_config, x
+    # Add the specified units to the cloud-config section.
+    unless options.formation_units == []
+      for x in options.formation_units
+        cloud_config = add_unit cloud_config, x
 
-  # Add the specified public keys.  We must be careful with indentation formatting.
-  unless options.public_keys == []
-    cloud_config.push "ssh_authorized_keys: \n"
-    for x in options.public_keys
-      cloud_config.push "  - #{x}\n"
+    # Add the specified public keys.  We must be careful with indentation formatting.
+    unless options.public_keys == []
+      cloud_config.push "ssh_authorized_keys: \n"
+      for x in options.public_keys
+        cloud_config.push "  - #{x}\n"
 
-  # Place this array back into the JSON object.  Construction complete.
-  user_data["Fn::Base64"]["Fn::Join"][1] = cloud_config
-  template_object.Resources.CoreOSServerLaunchConfig.Properties.UserData = user_data
+    # Place this array back into the JSON object.  Construction complete.
+    user_data["Fn::Base64"]["Fn::Join"][1] = cloud_config
+    template_object.Resources.CoreOSServerLaunchConfig.Properties.UserData = user_data
 
-  # Return the JSON string.
-  return JSON.stringify template_object, null, "\t"
+    # Return the JSON string.
+    return JSON.stringify template_object, null, "\t"
+
+  catch error
+    return build_error "Unable to build CloudFormation template.", error
 
 
 # Configure the AWS object for account access.
@@ -159,11 +190,12 @@ validate_key_pair = async (key_pair, creds) ->
     names.push key.KeyName    for key in data.KeyPairs
 
     unless key_pair in names
-      throw "\nError: This AWS account does not have a key pair named \"#{key_pair}\".\n\n"
+      return build_error "This AWS account does not have a key pair named \"#{key_pair}\"."
+
     return true # validated
 
   catch err
-    throw "\nError:  Unable to validate SSH key.\n #{err}\n\n"
+    return build_error "Unable to validate SSH key.", err
 
 
 
@@ -176,21 +208,10 @@ launch_stack = async (params, creds) ->
 
   try
     data = yield create_stack params
-    process.stdout.write "\nSuccess!!  Cluster formation is in progress.\n"
-    res =
-      message: "Cluster formation in progress"
-      status: "in progress"
-      data: data
-      error: null
-    return data
+    return build_success "Cluster formation in progress.", data
 
   catch err
-    res = new Error
-    res.message = "Cluster formation failed"
-    res.data = null
-    res.status = "failure"
-    res.error = err
-    throw res
+    return build_error "Unable to access AWS CloudFormation", err
 
 
 # This function checks the specified AWS stack to see if its formation is complete.
@@ -205,132 +226,154 @@ get_formation_status = async (name, creds) ->
 
     if data.StackEvents[0].ResourceType == "AWS::CloudFormation::Stack" &&
     data.StackEvents[0].ResourceStatus == "CREATE_COMPLETE"
-      res =
-        message: "Cluster formation successful"
-        status: "success"
-        data: data
-        error: null
-      return res
+      return build_success "The cluster is confirmed to be online and ready.", data
+
     else if data.StackEvents.ResourceStatus == "CREATE_FAILED"
-      res = new Error
-      res.message = "Cluster formation failed"
-      res.status = "failure"
-      res.data = null
-      res.error = data
-      throw res
-      #throw "\nApologies. Cluster formation has failed. "
+      return build_error "AWS CloudFormation returned status \"CREATE_FAILED\".", data
+
     else
       return false
 
   catch err
-    throw "\nApologies. Cluster formation has failed.\n\n#{err}\n"
+    return build_error "Unable to access AWS CloudFormation.", err
 
 
 # Cluster creation can take several minutes.  This function polls AWS until the
 # CoreOS cluster is fully formed and ready for additional instructions.
 detect_formation = async (name, creds) ->
-  res = null
-  while !(res = yield get_formation_status(name, creds))
-    yield pause 5000
-  res
+  try
+    while true
+      status = yield get_formation_status(name, creds))
+      if status
+        return status
+      else
+        yield pause 5000
+
+  catch error
+    return build_error "Unable to detect cluster formation.", error
 
 
-
-
-
+#-------------------------
+# Cluster Customization
+#-------------------------
 
 # Associate the cluster's IP address with a domain the user owns via Route 53.
 set_cluster_url = async (url, creds) ->
-  # First, get the Domain Name
-  split_url = url.split "."
-  len = split_url.length
-  domain = "#{split_domain[ len - 2 ]}.#{split_domain[ len - 1] }"
-
-  # Now, the Hosted Zone ID
-  AWS.config = set_aws_creds creds
-  r53 = new AWS.Route53()
-  list_zones = lift_object r53, r53.listHostedZones
-
   try
-    data = yield list_zones {}
 
-    names = pluck data.HostedZones, Name
-    ids = pluck data.HostedZones, Id
-    if url in names
-      zone_id = ids[names.indexOf(url)]
-    else
-      throw "\nError: The specified domain is not associated with this account.\n"
+  catch error
+    return build_error "Unable to assign the cluster's IP addres to the designated hostname.", error
 
-  catch err
-    throw err
-
-  # Start building the params object for Route53 Record Set function.
-#  params =
-#    ChangeBatch: {
-#      Changes: [
-#      {
-#        Action: 'UPSERT',
-#        ResourceRecordSet: {
-#          Name: "#{url}", 
-#          Type: 'A',
+  # # First, get the Domain Name
+  # split_url = url.split "."
+  # len = split_url.length
+  # domain = "#{split_domain[ len - 2 ]}.#{split_domain[ len - 1] }"
+  #
+  # # Now, the Hosted Zone ID
+  # AWS.config = set_aws_creds creds
+  # r53 = new AWS.Route53()
+  # list_zones = lift_object r53, r53.listHostedZones
+  #
+  # try
+  #   data = yield list_zones {}
+  #
+  #   names = pluck data.HostedZones, Name
+  #   ids = pluck data.HostedZones, Id
+  #   if url in names
+  #     zone_id = ids[names.indexOf(url)]
+  #   else
+  #     throw build_error "The specified domain is not associated with this account."
+  #
+  # catch err
+  #   throw build_error "Unable to access AWS Route 53.", err
+  #
+  # # Start building the params object for Route53 Record Set function.
+  # params =
+  #   ChangeBatch: {
+  #     Changes: [
+  #     {
+  #       Action: 'UPSERT',
+  #       ResourceRecordSet: {
+  #         Name: "#{url}",
+  #         Type: 'A'
+  #       }
 
 
 # Using Private DNS from Route 53, we need to give the cluster a private DNS
 # so services may be referenced with human-friendly names.
 launch_dns = async (domain, creds) ->
-  # do something
+  try
+
+  catch error
+    return build_error "Unable to establish the cluster's private DNS.", error
 
 
 
 
 
-# Prepare the cluster to accept customization.  This will likey get more complex
-# in the future.
-prepare_cluster = async (config) ->
-  command =
-    "ssh core@#{config.cluster_url} << EOF\n" +
-    "mkdir services\n" +
-    "EOF"
+# Prepare the cluster to accept services by installing a directory called "launch".
+# launch acts as a repository where each service will have its own sub-directory
+# containing a Dockerfile, *.service file, and anything else it needs.
+prepare_launch_repository = async (config) ->
+  try
+    command =
+      "ssh core@#{config.cluster_url} << EOF\n" +
+      "mkdir services\n" +
+      "EOF"
 
-  exec command
+    execute command
+    return build_success "The Launch Repository is ready."
+
+  catch error
+    return build_error "Unable to install the Launch Repository.", error
 
 # Helper function that launches a single unit from PandaCluster's library onto the cluster.
 launch_service_unit = async (name, cluster_url) ->
-  # Place a copy of the customized unit file on the cluster.
-  exec "scp #{__dirname}/services/#{name}  core@#{cluster_url}:/home/core/services/."
+  try
+    # Place a copy of the customized unit file on the cluster.
+    execute "scp #{__dirname}/services/#{name}  core@#{cluster_url}:/home/core/services/."
 
-  # Launch the service
-  command =
-    "ssh core@#{cluster_url} << EOF\n" +
-    "fleetctl start services/#{name}\n" +
-    "EOF"
+    # Launch the service
+    command =
+      "ssh core@#{cluster_url} << EOF\n" +
+      "fleetctl start services/#{name}\n" +
+      "EOF"
 
-  exec command
+    execute command
+
+  catch error
+    return build_error "Unable to launch service unit.", error
 
 
 # Place a hook-server on the cluster that will respond to users' git commands
 # and launch githook scripts.  The hook-server is loaded with all cluster public keys.
 launch_hook_server = async (config) ->
-  # Customize the hook-server unit file template.
-  # Add public SSH keys.
-  # FIXME: templatize
-  generate config.variables, "output.txt"
-  # Launch
-  yield launch_service_unit "hook-server.service", config.cluster_url
+  try
+    # Customize the hook-server unit file template.
+    # Add public SSH keys.
+
+    # FIXME: templatize
+    # Launch
+    yield launch_service_unit "hook-server.service", config.cluster_url
+
+  catch error
+    return build_error "Unable to install hook-server into cluster.", error
 
 
 # After cluster formation is complete, optionally launch a variety of services
 # into the cluster from a library of established unit-files and AWS commands.
 customize_cluster = async (options, creds) ->
+  try
+    # Options that use AWS interface.
+    yield set_cluster_url options.cluster_url, creds  if options.cluster_url?
+    yield launch_dns options.dns, creds               if options.dns?
 
-  # Options that use AWS interface.
-  yield set_cluster_url options.cluster_url, creds  if options.cluster_url?
-  yield launch_dns options.dns, creds               if options.dns?
+    # Options that use CoreOS service units.
+    yield prepare_launch_repository options
+    yield launch_hook_server options.hook_server      if options.hook_server?
 
-  # Options that use CoreOS service units.
-  yield prepare_cluster options
-  yield launch_hook_server options.hook_server      if options.hook_server?
-  
+  catch error
+    return build_error "Unable to properly configure cluster.", error
 
 
 
@@ -342,22 +385,12 @@ destroy_cluster = async (params, creds) ->
 
   try
     data = yield delete_stack params
-    process.stdout.write "\nSuccess!!  Cluster destruction is in progress.\n"
-    res =
-      message: "Cluster destruction in progress"
-      error: null
-      data: data
-      status: "in progress"
-    return res
+    return data
 
   catch err
-    # FIXME: fix error here
-    res = new Error
-    res.message = "Destroy cluster failed"
-    res.error = err
-    res.data = null
-    res.status = "failure"
-    throw res
+    throw build_error "Unable to access AWS Cloudformation.", err
+
+
 
 #===============================
 # PandaCluster Definition
@@ -369,62 +402,60 @@ module.exports =
     credentials = options.aws
     credentials.region = options.region || credentials.region
 
-    # Build the "params" object that is used directly by the AWS "createStack" method.
-    params = {}
-    params.StackName = options.stack_name
-    params.OnFailure = "DELETE"
-    params.TemplateBody = yield build_template options
-
-    #---------------------------------------------------------------------------
-    # Parameters is a map of key/values custom defined for this stack by the
-    # template file.  We will now fill out the map as specified or with defaults.
-    #---------------------------------------------------------------------------
-    params.Parameters = [
-
-      { # InstanceType
-        "ParameterKey": "InstanceType"
-        "ParameterValue": options.instance_type || "m3.medium"
-      }
-
-      { # ClusterSize
-        "ParameterKey": "ClusterSize"
-        "ParameterValue": options.cluster_size || "3"
-      }
-
-      { # DiscoveryURL - Grab a randomized URL from etcd's free discovery service.
-        "ParameterKey": "DiscoveryURL"
-        "ParameterValue": yield get_discovery_url()
-      }
-
-      { # KeyPair
-        "ParameterKey": "KeyPair"
-        "ParameterValue": options.key_pair if yield validate_key_pair( options.key_pair, credentials)
-      }
-
-      # AdvertisedIPAddress - uses default "private", TODO: Add this option
-      # AllowSSHFrom        - uses default "everywhere", TODO: Add this option
-    ]
-
-    #---------------------
-    # Access AWS
-    #---------------------
-    # With everything in place, we may finally make a call to Amazon's API.
     try
-      launch_res = yield launch_stack( params, credentials)
-      detect_res = yield detect_formation( options.stack_name, credentials)
+      # Build the "params" object that is used directly by the AWS "createStack" method.
+      params = {}
+      params.StackName = options.stack_name
+      params.OnFailure = "DELETE"
+      params.TemplateBody = yield build_template options
+
+      #---------------------------------------------------------------------------
+      # Parameters is a map of key/values custom defined for this stack by the
+      # template file.  We will now fill out the map as specified or with defaults.
+      #---------------------------------------------------------------------------
+      params.Parameters = [
+
+        { # InstanceType
+          "ParameterKey": "InstanceType"
+          "ParameterValue": options.instance_type || "m3.medium"
+        }
+
+        { # ClusterSize
+          "ParameterKey": "ClusterSize"
+          "ParameterValue": options.cluster_size || "3"
+        }
+
+        { # DiscoveryURL - Grab a randomized URL from etcd's free discovery service.
+          "ParameterKey": "DiscoveryURL"
+          "ParameterValue": yield get_discovery_url()
+        }
+
+        { # KeyPair
+          "ParameterKey": "KeyPair"
+          "ParameterValue": options.key_pair if yield validate_key_pair( options.key_pair, credentials)
+        }
+
+        # AdvertisedIPAddress - uses default "private",    TODO: Add this option
+        # AllowSSHFrom        - uses default "everywhere", TODO: Add this option
+      ]
+
+      #---------------------
+      # Access AWS
+      #---------------------
+      # With everything in place, we may finally make a call to Amazon's API.
+      # Gather data as we go.
+      data =
+        launch_stack: yield launch_stack( params, credentials)
+        detect_formation: yield detect_formation( options.stack_name, credentials)
+        customize_cluster: yield customize_cluster( options, credentials)
+
+      return build_success "The requested cluster is online, configured, and ready.",
+        data, 201
+
+
     catch error
-      return error
+      return build_error "Apologies. The requested cluster cannot be created.", error
 
-    success_object =
-      message: "Create cluster pretty successful"
-      status: "success"
-      error: null
-      data:
-        launch_res: launch_res
-        detect_res: detect_res
-
-    #yield customize_cluster( options, credentials)
-    return success_object
 
 
 
@@ -442,14 +473,12 @@ module.exports =
     #---------------------
     # With everything in place, we may finally make a call to Amazon's API.
     try
-      res = yield destroy_cluster( params, credentials)
-    catch error
-      return error
+      # Gather data as we go.
+      data =
+        destroy_cluster: yield destroy_cluster( params, credentials)
 
-    success_object =
-      message: "Destroy cluster in progress"
-      status: "in progress"
-      error: null
-      data:
-        destroy_cluster: destroy_cluster
-    return res
+      return build_success "The targeted cluster has been destroyed.  All related resources have been released.",
+      data, 201
+
+    catch error
+      return build_error "Apologies. The targeted cluster has not been destroyed.", error
