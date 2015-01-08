@@ -1,44 +1,68 @@
 assert = require "assert"
-{call} = require "when/generator"
-{resolve} = require "path"
-{read} = require "fairmont"
-pandacluster = require "../src/pandacluster"
 cson = require "c50n"
+{call} = require "when/generator"
+{read} = require "fairmont"
+{resolve} = require "path"
+pandacluster = require "../src/pandacluster"
+nock = require "nock"
 
 require 'shelljs/global'
 
+try
+  aws = cson.parse (read(resolve("#{process.env.HOME}/.pandacluster.cson")))
+catch error
+  assert.fail error, null, "Credential file ~/.pandacluster.cson  missing"
 
-aws = cson.parse (read(resolve("#{process.env.HOME}/.pandacluster.cson")))
 options =
   public_keys: aws.public_keys
   stack_name: "peter-cli-test"
   key_pair: "peter"
-  units: []
+  formation_units: []
   aws: aws.aws
 
 call ->
 
   try
+
+    nock.recorder.rec
+      dont_print: false
+      output_objects: true
+      persist: true
+
     res = yield pandacluster.create options
-    console.log res
+    {status, message, error, data} = res
+    assert.equal status, "success"
+    assert.equal message, "Create cluster pretty successful"
+    assert.equal error, null
+    assert.ok data.launch_res
+    assert.ok data.detect_res
+
 
   catch error
+    assert.throws error, null, "Create cluster failed"
     console.log error
+
+  fixtures = nock.recorder.play()
+  console.log "fixtures : #{JSON.stringify(fixtures, undefined, 2)}"
+
 
   try
-    #res = yield pandacluster.destroy options
+    res = yield pandacluster.destroy options
     console.log res
+    {status, message, error, data} = res
+    assert.equal status, "in progress"
+    assert.equal message, "Cluster destruction in progress"
+    assert.equal error, null
+    assert.ok data.destroy_cluster.ResponseMetaData.RequestId
 
   catch error
-    console.log error
+    assert.fail error, null, "Destroy cluster failed"
 
 
 
 
 
 
-#assert = require "assert"
-#nock = require "nock"
 #
 #
 # TODO: setup option to record or play, but lower priority

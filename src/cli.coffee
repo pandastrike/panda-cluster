@@ -30,13 +30,13 @@ is_integer = (value) -> parseInt(value, 10) != NaN
 # Output an Info Blurb and optional message.
 usage = (entry, message) ->
   if message?
-    process.stderr.write "#{message}\n"
-
-  throw read( resolve( __dirname, "..", "doc", entry ) )
+    throw "#{message}\n" + read( resolve( __dirname, "..", "doc", entry ) )
+  else
+    throw read( resolve( __dirname, "..", "doc", entry ) )
 
 # Accept only the allowed values for flags that take an enumerated type.
 allow_only = (allowed_values, value, flag) ->
-  if value not in allowed_values
+  unless value in allowed_values
     throw "\nError: Only Allowed Values May Be Specified For Flag: #{flag}\n\n"
 
 # Accept only integers within the accepted range, inclusive.
@@ -50,7 +50,7 @@ allow_between = (min, max, value, flag) ->
 # Parse the arguments passed to a sub-command.  Construct an "options" object to pass to the main library.
 parse_cli = (command, argv) ->
   # Deliver an info blurb if neccessary.
-  usage command   if argv[0] == "-h" or argv[0] == "help"
+  usage command   if argv[0] == "-h" || argv[0] == "help"
 
   # Begin constructing the "options" object by pulling persistent configuration data
   # from the CSON file in the user's $HOME directory.
@@ -81,7 +81,7 @@ parse_cli = (command, argv) ->
     # Add data to the "options" object.
     options[name] = argv[1]
 
-    # Delete these arguments.
+    # Delete these two arguments.
     argv = argv[2..]
 
   # Done looping.  Check to see if all required flags have been defined.
@@ -92,19 +92,19 @@ parse_cli = (command, argv) ->
   return options
 
 
-# Based on the above parsing, we must finalize the array "options.units".  This
+# We must finalize the array "options.formation_units".  This
 # variable is an array of objects detailing which services are launched during
-# cluster formation.  The list of all available units is in "src/services/units.cson"
-gather_units = (options) ->
-  unit_hash = parse( read( resolve(__dirname, "services/units.cson")))
+# cluster formation.  The list of all available units is in "src/services/formation-units.cson"
+gather_formation_units = (options) ->
+  unit_hash = parse( read( resolve(__dirname, "services/formation-units.cson")))
 
   # Build array.
-  options.units = []
+  units = []
   for key of unit_hash
-    options.units.push unit_hash[key]   if options[key]?
+    units.push unit_hash[key]   if options[key]?
 
   # Alleviate possible array nesting with shallow flattening.
-  return flatten options.units, true
+  return flatten units, true
 
 #===============================================================================
 # Main - Top-Level Command-Line Interface
@@ -113,14 +113,14 @@ gather_units = (options) ->
 argv = argv[2..]
 
 # Deliver an info blurb if neccessary.
-if argv.length == 0 or argv[0] == "-h" or argv[0] == "help"
+if argv.length == 0 || argv[0] == "-h" || argv[0] == "help"
   usage "main"
 
 # Now, look for the specified sub-command.
 switch argv[0]
   when "create"
     options = parse_cli "create", argv[1..]
-    options.units = gather_units options
+    options.formation_units = gather_formation_units options
     PC.create options
   when "destroy"
     options = parse_cli "destroy", argv[1..]

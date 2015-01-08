@@ -7,20 +7,22 @@
 #====================
 https = require "https"
 {resolve} = require "path"
-resolve_path = (x...) -> resolve(x...)    # Avoids confusion with "resolve" of promise
 
 # In-House Libraries
 {read, write} = require "fairmont"        # Easy file read/write
 {parse} = require "c50n"                  # .cson file parsing
 
 # When Library
-{promise, lift} = require "when"          # Awesome promise library
+{promise, lift} = require "when"
 {liftAll} = require "when/node"
 node_lift = (require "when/node").lift
-async = (require "when/generator").lift   # Makes resuable generators.
+async = (require "when/generator").lift
 
-AWS = require "aws-sdk"                   # Access AWS API
+# ShellJS
+{exec} = require "shelljs"
 
+# Access AWS API
+AWS = require "aws-sdk"
 
 
 #================================
@@ -29,6 +31,13 @@ AWS = require "aws-sdk"                   # Access AWS API
 # Allow "when" to lift AWS module functions, which are non-standard.
 lift_object = (object, method) ->
   node_lift method.bind object
+
+# This is a wrap of setTimeout with ES6 technology that forces a non-blocking
+# pause in execution for the specified duration (in ms).
+pause = (duration) ->
+  promise (resolve, reject) ->
+    callback = -> resolve()
+    setTimeout callback, duration
 
 # Promise wrapper around Node's https module. Makes GET calls into promises.
 https_get = (url) ->
@@ -53,17 +62,17 @@ get_body = (response) ->
       resolve error
 
 # Wrapper for https call to etcd's discovery API.
-get_discovery_url = async () -> yield get_body( yield https_get( "https://discovery.etcd.io/new"))
+get_discovery_url = async -> yield get_body( yield https_get( "https://discovery.etcd.io/new"))
 
 
 # Pulls the most recent AWS CloudFormation template from CoreOS.
 pull_cloud_template = async ({channel, virtualization}) ->
   # Set reasonable defaults for these preferences.
-  channel = channel or "stable"
-  virtualization = virtualization or "pv"
+  channel ||= "stable"
+  virtualization ||= "pv"
 
   # This directory has a handy CSON file of URLs for CoreOS's latest CloudFormation templates.
-  template_store = parse( read( resolve_path( __dirname, "templates.cson")))
+  template_store = parse( read( resolve( __dirname, "templates.cson")))
   template_url = template_store[channel][virtualization]
 
   response = yield https_get template_url
@@ -88,7 +97,7 @@ add_unit = (cloud_config, unit) ->
   # For "content", we draw from a unit-file maintained in a separate file. Add
   # eight spaces to the begining of each line (4 indentations) and follow each
   # line with an explicit new-line character.
-  content = read( resolve_path( __dirname, "services/#{unit.name}"))
+  content = read( resolve( __dirname, "services/#{unit.name}"))
   content = content.split "\n"
 
   while content.length > 0
@@ -110,8 +119,8 @@ build_template = async (options) ->
   cloud_config = user_data["Fn::Base64"]["Fn::Join"][1]
 
   # Add the specified units to the cloud-config section.
-  unless options.units == []
-    for x in options.units
+  unless options.formation_units == []
+    for x in options.formation_units
       cloud_config = add_unit cloud_config, x
 
   # Add the specified public keys.  We must be careful with indentation formatting.
@@ -149,7 +158,7 @@ validate_key_pair = async (key_pair, creds) ->
     names = []
     names.push key.KeyName    for key in data.KeyPairs
 
-    if key_pair not in names
+    unless key_pair in names
       throw "\nError: This AWS account does not have a key pair named \"#{key_pair}\".\n\n"
     return true # validated
 
@@ -158,8 +167,9 @@ validate_key_pair = async (key_pair, creds) ->
 
 
 
-# Create a CoreOS cluster using the AWS account information that has been gathered.
-create_cluster = async (params, creds) ->
+# Launch the procces that eventually creates a CoreOS cluster using the AWS
+# account information that has been gathered.
+launch_stack = async (params, creds) ->
   AWS.config = set_aws_creds creds
   cf = new AWS.CloudFormation()
   create_stack = lift_object cf, cf.createStack
@@ -167,10 +177,161 @@ create_cluster = async (params, creds) ->
   try
     data = yield create_stack params
     process.stdout.write "\nSuccess!!  Cluster formation is in progress.\n"
+    res =
+      message: "Cluster formation in progress"
+      status: "in progress"
+      data: data
+      error: null
     return data
 
   catch err
+    res = new Error
+    res.message = "Cluster formation failed"
+    res.data = null
+    res.status = "failure"
+    res.error = err
+    throw res
+
+
+# This function checks the specified AWS stack to see if its formation is complete.
+# It returns either true or false, and throws an exception if an AWS error is reported.
+get_formation_status = async (name, creds) ->
+  AWS.config = set_aws_creds creds
+  cf = new AWS.CloudFormation()
+  describe_events = lift_object cf, cf.describeStackEvents
+
+  try
+    data = yield describe_events {StackName: name}
+
+    if data.StackEvents[0].ResourceType == "AWS::CloudFormation::Stack" &&
+    data.StackEvents[0].ResourceStatus == "CREATE_COMPLETE"
+      res =
+        message: "Cluster formation successful"
+        status: "success"
+        data: data
+        error: null
+      return res
+    else if data.StackEvents.ResourceStatus == "CREATE_FAILED"
+      res = new Error
+      res.message = "Cluster formation failed"
+      res.status = "failure"
+      res.data = null
+      res.error = data
+      throw res
+      #throw "\nApologies. Cluster formation has failed. "
+    else
+      return false
+
+  catch err
     throw "\nApologies. Cluster formation has failed.\n\n#{err}\n"
+
+
+# Cluster creation can take several minutes.  This function polls AWS until the
+# CoreOS cluster is fully formed and ready for additional instructions.
+detect_formation = async (name, creds) ->
+  res = null
+  while !(res = yield get_formation_status(name, creds))
+    yield pause 5000
+  res
+
+
+
+
+
+
+# Associate the cluster's IP address with a domain the user owns via Route 53.
+set_cluster_url = async (url, creds) ->
+  # First, get the Domain Name
+  split_url = url.split "."
+  len = split_url.length
+  domain = "#{split_domain[ len - 2 ]}.#{split_domain[ len - 1] }"
+
+  # Now, the Hosted Zone ID
+  AWS.config = set_aws_creds creds
+  r53 = new AWS.Route53()
+  list_zones = lift_object r53, r53.listHostedZones
+
+  try
+    data = yield list_zones {}
+
+    names = pluck data.HostedZones, Name
+    ids = pluck data.HostedZones, Id
+    if url in names
+      zone_id = ids[names.indexOf(url)]
+    else
+      throw "\nError: The specified domain is not associated with this account.\n"
+
+  catch err
+    throw err
+
+  # Start building the params object for Route53 Record Set function.
+#  params =
+#    ChangeBatch: {
+#      Changes: [
+#      {
+#        Action: 'UPSERT',
+#        ResourceRecordSet: {
+#          Name: "#{url}", 
+#          Type: 'A',
+
+
+# Using Private DNS from Route 53, we need to give the cluster a private DNS
+# so services may be referenced with human-friendly names.
+launch_dns = async (domain, creds) ->
+  # do something
+
+
+
+
+
+# Prepare the cluster to accept customization.  This will likey get more complex
+# in the future.
+prepare_cluster = async (config) ->
+  command =
+    "ssh core@#{config.cluster_url} << EOF\n" +
+    "mkdir services\n" +
+    "EOF"
+
+  exec command
+
+# Helper function that launches a single unit from PandaCluster's library onto the cluster.
+launch_service_unit = async (name, cluster_url) ->
+  # Place a copy of the customized unit file on the cluster.
+  exec "scp #{__dirname}/services/#{name}  core@#{cluster_url}:/home/core/services/."
+
+  # Launch the service
+  command =
+    "ssh core@#{cluster_url} << EOF\n" +
+    "fleetctl start services/#{name}\n" +
+    "EOF"
+
+  exec command
+
+
+# Place a hook-server on the cluster that will respond to users' git commands
+# and launch githook scripts.  The hook-server is loaded with all cluster public keys.
+launch_hook_server = async (config) ->
+  # Customize the hook-server unit file template.
+  # Add public SSH keys.
+  # FIXME: templatize
+  generate config.variables, "output.txt"
+  # Launch
+  yield launch_service_unit "hook-server.service", config.cluster_url
+
+
+# After cluster formation is complete, optionally launch a variety of services
+# into the cluster from a library of established unit-files and AWS commands.
+customize_cluster = async (options, creds) ->
+
+  # Options that use AWS interface.
+  yield set_cluster_url options.cluster_url, creds  if options.cluster_url?
+  yield launch_dns options.dns, creds               if options.dns?
+
+  # Options that use CoreOS service units.
+  yield prepare_cluster options
+  yield launch_hook_server options.hook_server      if options.hook_server?
+  
+
 
 
 # Destroy a CoreOS cluster using the AWS account information that has been gathered.
@@ -182,10 +343,21 @@ destroy_cluster = async (params, creds) ->
   try
     data = yield delete_stack params
     process.stdout.write "\nSuccess!!  Cluster destruction is in progress.\n"
-    return data
+    res =
+      message: "Cluster destruction in progress"
+      error: null
+      data: data
+      status: "in progress"
+    return res
 
   catch err
-    throw "\nApologies. Cluster destruction has failed.\n\n#{err}\n"
+    # FIXME: fix error here
+    res = new Error
+    res.message = "Destroy cluster failed"
+    res.error = err
+    res.data = null
+    res.status = "failure"
+    throw res
 
 #===============================
 # PandaCluster Definition
@@ -195,7 +367,7 @@ module.exports =
   # This method creates and starts a CoreOS cluster.
   create: async (options) ->
     credentials = options.aws
-    credentials.region = options.region or credentials.region
+    credentials.region = options.region || credentials.region
 
     # Build the "params" object that is used directly by the AWS "createStack" method.
     params = {}
@@ -211,12 +383,12 @@ module.exports =
 
       { # InstanceType
         "ParameterKey": "InstanceType"
-        "ParameterValue": options.instance_type or "m3.medium"
+        "ParameterValue": options.instance_type || "m3.medium"
       }
 
       { # ClusterSize
         "ParameterKey": "ClusterSize"
-        "ParameterValue": options.cluster_size or "3"
+        "ParameterValue": options.cluster_size || "3"
       }
 
       { # DiscoveryURL - Grab a randomized URL from etcd's free discovery service.
@@ -237,17 +409,29 @@ module.exports =
     # Access AWS
     #---------------------
     # With everything in place, we may finally make a call to Amazon's API.
-    return yield create_cluster( params, credentials)
+    try
+      launch_res = yield launch_stack( params, credentials)
+      detect_res = yield detect_formation( options.stack_name, credentials)
+    catch error
+      return error
 
+    success_object =
+      message: "Create cluster pretty successful"
+      status: "success"
+      error: null
+      data:
+        launch_res: launch_res
+        detect_res: detect_res
 
-
+    #yield customize_cluster( options, credentials)
+    return success_object
 
 
 
   # This method stops and destroys a CoreOS cluster.
   destroy: async (options) ->
     credentials = options.aws
-    credentials.region = options.region or credentials.region
+    credentials.region = options.region || credentials.region
 
     # Build the "params" object that is used directly by the "createStack" method.
     params = {}
@@ -257,4 +441,15 @@ module.exports =
     # Access AWS
     #---------------------
     # With everything in place, we may finally make a call to Amazon's API.
-    return yield destroy_cluster( params, credentials)
+    try
+      res = yield destroy_cluster( params, credentials)
+    catch error
+      return error
+
+    success_object =
+      message: "Destroy cluster in progress"
+      status: "in progress"
+      error: null
+      data:
+        destroy_cluster: destroy_cluster
+    return res

@@ -11,7 +11,7 @@ create:[
     allowed_values: ["alpha", "beta", "stable"]
   }
   {
-    name: "skydns"
+    name: "dns"
     flag: "-d"
   }
   {

@@ -7,17 +7,6 @@
 # CloudFormation template.  We use this to handle a lot of gross formatting.
 #===============================================================================
 
-
-# A hook-server provides server-side githooks, arbitrary scripts that are
-# selectively triggered via git commands.
-hook_server: [
-  {
-    name: "hook-server.service"
-    runtime: "true"
-    command: "start"
-  }
-]
-
 # It is possible to add ephemeral storage to each machine in the cluster and mount
 # the Docker host to that drive before "Docker.service" starts.  The amount of
 # additional storage you get depends on the EC2 instance you're using.  Look here for more...
@@ -30,16 +19,6 @@ mount_docker: [
   },
   {
     name: "var-lib-docker.mount"
-    runtime: "true"
-    command: "start"
-  }
-]
-
-# SkyDNS is a nifty private DNS tool built on etcd, which makes it a perfect match
-# for a CoreOS cluster.  Use it to reference services with human-friendly names.
-skydns: [
-  {
-    name: "skydns.service"
     runtime: "true"
     command: "start"
   }
