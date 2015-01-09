@@ -137,18 +137,46 @@ add_unit = (cloud_config, unit) ->
 
 
 
+# Creates format-ephemeral.service from template.
+# Defaults drive path to /dev/xvdb
+prepare_ephemeral_drive = async (drive_path) ->
+  drive_path |= "/dev/xvdb"
+  templatize "services/format-ephemeral.template", "src/services/format-ephemeral.service",
+    drive_path: drive_path
+  # FIXME: return properly , will need async and lift for templatizing
+  true
+
+# Creates var-lib-docker.mount from template.
+# Defaults drive path to /dev/xvdb
+prepare_docker_mount = async (drive_path) ->
+  drive_path |= "/dev/xvdb"
+  templatize "services/var-lib-docker.template", "src/services/var-lib-docker.mount",
+    drive_path: drive_path
+  # FIXME: return properly , will need async and lift for templatizing
+  true
+
 # Build an AWS CloudFormation template by augmenting the official ones released
 # by CoreOS.  Return a JSON string.
 build_template = async (options) ->
+  console.log "build template options: #{JSON.stringify(options, undefined, 2)}"
   try
     # Pull official CoreOS template as a JSON object.
     template_object = yield pull_cloud_template options
+    console.log "template object: #{JSON.stringify(template_object, undefined, 2)}"
 
     # Isolate the cloud-config array within the JSON object.
     user_data = template_object.Resources.CoreOSServerLaunchConfig.Properties.UserData
     cloud_config = user_data["Fn::Base64"]["Fn::Join"][1]
-
+    console.log "template object: #{JSON.stringify template_object}"
     # Add the specified units to the cloud-config section.
+
+    # Creates .service and .mount files from templates.
+    # Defaults to creating a service file with drive /dev/xvdb.
+    if "format-ephemeral.service" in options.formation_units
+      prepare_ephemeral_drive options.ephemeral_drive
+    if "var-lib-docker.mount" in options.formation_units
+      prepare_docker_mount options.ephemeral_drive
+
     unless options.formation_units == []
       for x in options.formation_units
         cloud_config = add_unit cloud_config, x
@@ -347,17 +375,19 @@ launch_service_unit = async (name, cluster_url) ->
     return build_error "Unable to launch service unit.", error
 
 
+
 # Place a hook-server on the cluster that will respond to users' git commands
 # and launch githook scripts.  The hook-server is loaded with all cluster public keys.
 launch_hook_server = async (config) ->
-  console.log "launch hook server config: ", config
   try
     # Customize the hook-server unit file template.
     # Add public SSH keys.
 
     # FIXME: templatize
-    templatize "services/hook-server.template", "src/services/hook-server.service",
-      ssh_keys: config.public_keys
+#    templatize "services/hook-server.template", "src/services/hook-server.service",
+#      ssh_keys: config.public_keys || []
+#      # FIXME: how do i attach the "after" field?
+#      after: config.after || "skydns.service"
 
     # Launch
     yield launch_service_unit "hook-server.service", config.cluster_url
@@ -376,7 +406,9 @@ customize_cluster = async (options, creds) ->
 
     # Options that use CoreOS service units.
     yield prepare_launch_repository options
+    # FIXME: where is the options.hook_server object set?
     yield launch_hook_server options.hook_server      if options.hook_server?
+
 
   catch error
     return build_error "Unable to properly configure cluster.", error
@@ -405,6 +437,7 @@ module.exports =
 
   # This method creates and starts a CoreOS cluster.
   create: async (options) ->
+    console.log "create options: #{JSON.stringify(options, undefined, 2)}"
     credentials = options.aws
     credentials.region = options.region || credentials.region
 
@@ -494,5 +527,6 @@ module.exports =
     # Turn file into interpolated string
     results_text = mustache.render hook_server_template.toString(), data
     # Write interpolated string to file
+    # FIXME: need to use async and lift file read/write
     write resolve(relative_write_path), results_text
     true

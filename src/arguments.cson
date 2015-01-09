@@ -6,6 +6,11 @@
 
 create:[
   {
+    # specifies when to run hook-server.service, defaults to "skydns.service"
+    name: "after"
+    flag: "-a"
+  }
+  {
     name: "channel"
     flag: "-c"
     allowed_values: ["alpha", "beta", "stable"]
@@ -13,6 +18,11 @@ create:[
   {
     name: "dns"
     flag: "-d"
+  }
+  {
+    # specifies location of ephemeral drive to format in format-ephemeral.service, defaults to "/dev/xvdb"
+    name: "ephemeral_drive"
+    flag: "-e"
   }
   {
     name: "instance_type"

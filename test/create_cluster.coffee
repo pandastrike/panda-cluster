@@ -11,41 +11,42 @@ require 'shelljs/global'
 # test run (can't *really* test in current form, writes to file)
 #pandacluster.templatize "services/hook-server.template", "src/services/hook-server.service",
 #  ssh_keys: "hello world"
+#  after: config.after || "skydns.service"
 
-#try
-#  aws = cson.parse (read(resolve("#{process.env.HOME}/.pandacluster.cson")))
-#catch error
-#  assert.fail error, null, "Credential file ~/.pandacluster.cson  missing"
-#
-#options =
-#  public_keys: aws.public_keys
-#  stack_name: "peter-cli-test"
-#  key_pair: "peter"
-#  formation_units: []
-#  aws: aws.aws
-#
-#call ->
-#
-#  try
-#
-##    nock.recorder.rec
-##      dont_print: false
-##      output_objects: true
-##      persist: true
-#
-#    res = yield pandacluster.create options
-#    {status, message, code, details} = res
-#    assert.equal status, "success"
-#    assert.equal message, "Create cluster pretty successful"
-#    assert.equal error, null
-#    assert.ok data.launch_res
-#    assert.ok data.detect_res
-#
-#
-#  catch error
-#    assert.throws error, null, "Create cluster failed"
-#    console.log error
-#
+try
+  aws = cson.parse (read(resolve("#{process.env.HOME}/.pandacluster.cson")))
+catch error
+  assert.fail error, null, "Credential file ~/.pandacluster.cson  missing"
+
+options =
+  public_keys: aws.public_keys
+  stack_name: "peter-cli-test"
+  key_pair: "peter"
+  formation_units: ["format-ephemeral.service", "var-lib-docker.mount"]
+  aws: aws.aws
+
+call ->
+
+  try
+
+#    nock.recorder.rec
+#      dont_print: false
+#      output_objects: true
+#      persist: true
+
+    res = yield pandacluster.create options
+    {status, message, code, details} = res
+    assert.equal status, "success"
+    assert.equal message, "Create cluster pretty successful"
+    assert.equal error, null
+    assert.ok data.launch_res
+    assert.ok data.detect_res
+
+
+  catch error
+    assert.throws error, null, "Create cluster failed"
+    console.log error
+
 ##  fixtures = nock.recorder.play()
 ##  console.log "fixtures : #{JSON.stringify(fixtures, undefined, 2)}"
 #
