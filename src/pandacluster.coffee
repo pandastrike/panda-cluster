@@ -24,6 +24,8 @@ async = (require "when/generator").lift
 # Access AWS API
 AWS = require "aws-sdk"
 
+# Template Engine
+mustache = require "mustache"
 
 #================================
 # Helper Functions
@@ -243,7 +245,7 @@ get_formation_status = async (name, creds) ->
 detect_formation = async (name, creds) ->
   try
     while true
-      status = yield get_formation_status(name, creds))
+      status = yield get_formation_status(name, creds)
       if status
         return status
       else
@@ -348,11 +350,15 @@ launch_service_unit = async (name, cluster_url) ->
 # Place a hook-server on the cluster that will respond to users' git commands
 # and launch githook scripts.  The hook-server is loaded with all cluster public keys.
 launch_hook_server = async (config) ->
+  console.log "launch hook server config: ", config
   try
     # Customize the hook-server unit file template.
     # Add public SSH keys.
 
     # FIXME: templatize
+    templatize "services/hook-server.template", "src/services/hook-server.service",
+      ssh_keys: config.public_keys
+
     # Launch
     yield launch_service_unit "hook-server.service", config.cluster_url
 
@@ -452,10 +458,8 @@ module.exports =
       return build_success "The requested cluster is online, configured, and ready.",
         data, 201
 
-
     catch error
       return build_error "Apologies. The requested cluster cannot be created.", error
-
 
 
 
@@ -478,7 +482,17 @@ module.exports =
         destroy_cluster: yield destroy_cluster( params, credentials)
 
       return build_success "The targeted cluster has been destroyed.  All related resources have been released.",
-      data, 201
+      data, 200
 
     catch error
       return build_error "Apologies. The targeted cluster has not been destroyed.", error
+
+  
+  templatize: (relative_read_path, relative_write_path, data) ->
+    # Read in template file
+    hook_server_template = read( resolve( __dirname, relative_read_path))
+    # Turn file into interpolated string
+    results_text = mustache.render hook_server_template.toString(), data
+    # Write interpolated string to file
+    write resolve(relative_write_path), results_text
+    true
