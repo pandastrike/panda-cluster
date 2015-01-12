@@ -12,6 +12,8 @@ https = require "https"
 {read, write} = require "fairmont"        # Easy file read/write
 {parse} = require "c50n"                  # .cson file parsing
 
+{where} = require "underscore"
+
 # When Library
 {promise, lift} = require "when"
 {liftAll} = require "when/node"
@@ -31,9 +33,9 @@ mustache = require "mustache"
 # Helper Functions
 #================================
 # Build an error object to let the user know something went worng.
-build_error = (message, error) ->
+build_error = (message, details) ->
   error = new Error message
-  error.details = err    if err?
+  error.details = details    if details?
   return error
 
 # Create a success object that reports data to user.
@@ -103,7 +105,6 @@ pull_cloud_template = async ({channel, virtualization}) ->
   try
     response = yield https_get template_url
     template_object = JSON.parse (yield get_body response)
-
     return template_object
 
   catch error
@@ -234,14 +235,50 @@ validate_key_pair = async (key_pair, creds) ->
 
 
 
-# Launch the procces that eventually creates a CoreOS cluster using the AWS
-# account information that has been gathered.
-launch_stack = async (params, creds) ->
-  AWS.config = set_aws_creds creds
-  cf = new AWS.CloudFormation()
-  create_stack = lift_object cf, cf.createStack
-
+# Launch the procces that eventually creates a CoreOS cluster using the user's AWS account.
+launch_stack = async (options, creds) ->
   try
+    # Build the "params" object that is used directly by AWS.
+    params = {}
+    params.StackName = options.stack_name
+    params.OnFailure = "DELETE"
+    params.TemplateBody = yield build_template options
+
+    #---------------------------------------------------------------------------
+    # Parameters is a map of key/values custom defined for this stack by the
+    # template file.  We will now fill out the map as specified or with defaults.
+    #---------------------------------------------------------------------------
+    params.Parameters = [
+
+      { # InstanceType
+        "ParameterKey": "InstanceType"
+        "ParameterValue": options.instance_type || "m3.medium"
+      }
+
+      { # ClusterSize
+        "ParameterKey": "ClusterSize"
+        "ParameterValue": options.cluster_size || "3"
+      }
+
+      { # DiscoveryURL - Grab a randomized URL from etcd's free discovery service.
+        "ParameterKey": "DiscoveryURL"
+        "ParameterValue": yield get_discovery_url()
+      }
+
+      { # KeyPair
+        "ParameterKey": "KeyPair"
+        "ParameterValue": options.key_pair if yield validate_key_pair( options.key_pair, creds)
+      }
+
+      # AdvertisedIPAddress - uses default "private",    TODO: Add this option
+      # AllowSSHFrom        - uses default "everywhere", TODO: Add this option
+    ]
+
+    # Preparations complete.  Access AWS.
+    AWS.config = set_aws_creds creds
+    cf = new AWS.CloudFormation()
+    create_stack = lift_object cf, cf.createStack
+
     data = yield create_stack params
     return build_success "Cluster formation in progress.", data
 
@@ -275,14 +312,15 @@ get_formation_status = async (name, creds) ->
 
 # Cluster creation can take several minutes.  This function polls AWS until the
 # CoreOS cluster is fully formed and ready for additional instructions.
-detect_formation = async (name, creds) ->
+detect_formation = async (options, creds) ->
   try
+
     while true
-      status = yield get_formation_status(name, creds)
+      status = yield get_formation_status(options.stack_name, creds)
       if status
-        return status
+        return status     # The cluster formation complete.
       else
-        yield pause 5000
+        yield pause 5000  # Not complete, keep going.
 
   catch error
     return build_error "Unable to detect cluster formation.", error
@@ -292,51 +330,159 @@ detect_formation = async (name, creds) ->
 # Cluster Customization
 #-------------------------
 
-# Associate the cluster's IP address with a domain the user owns via Route 53.
-set_cluster_url = async (url, creds) ->
+get_cluster_ip_address = async (options, creds) ->
+    AWS.config = set_aws_creds creds
+    ec2 = new AWS.EC2()
+    describe_instances = lift_object ec2, ec2.describeInstances
+
+    params =
+      Filters: [
+        {
+          Name: "tag:aws:cloudformation:stack-name"
+          Values: [
+            options.stack_name  # Only examine instances within the stack we just created.
+          ]
+        }
+        {
+          Name: "instance-state-code"
+          Values: [
+            "16"      # Only examine running instances.
+          ]
+        }
+      ]
+
+    try
+      data = yield describe_instances params
+      return data.Reservations[0].Instances[0].PublicIpAddress
+
+    catch error
+      return build_error "Unable to access AWS EC2.", error
+
+
+# Given a URL of many possible formats, return the root domain.
+# https://awesome.example.com/test/42#?=What+is+the+answer  =>  example.com.
+get_root_domain = (url) ->
   try
+    # Find and remove protocol (http, ftp, etc.), if present, and get domain
+
+    if url.indexOf("://") != -1
+      domain = url.split('/')[2]
+    else
+      domain = url.split('/')[0]
+
+    # Find and remove port number
+    domain = domain.split(':')[0]
+
+    # Now grab the root domain, the top-level-domain, plus what's to the left of it.
+    # Be careful of tld's that are followed by a period.
+    foo = domain.split "."
+    if foo[foo.length - 1] == ""
+      domain = "#{foo[foo.length - 3]}.#{foo[foo.length - 2]}"
+    else
+      domain = "#{foo[foo.length - 2]}.#{foo[foo.length - 1]}"
+
+    # And finally, make the sure the root_domain ends with a "."
+    domain = domain + "."
+    return domain
 
   catch error
-    return build_error "Unable to assign the cluster's IP addres to the designated hostname.", error
+    return build_error "There was an issue parsing the requested hostname.", error
 
-  # # First, get the Domain Name
-  # split_url = url.split "."
-  # len = split_url.length
-  # domain = "#{split_domain[ len - 2 ]}.#{split_domain[ len - 1] }"
-  #
-  # # Now, the Hosted Zone ID
-  # AWS.config = set_aws_creds creds
-  # r53 = new AWS.Route53()
-  # list_zones = lift_object r53, r53.listHostedZones
-  #
-  # try
-  #   data = yield list_zones {}
-  #
-  #   names = pluck data.HostedZones, Name
-  #   ids = pluck data.HostedZones, Id
-  #   if url in names
-  #     zone_id = ids[names.indexOf(url)]
-  #   else
-  #     throw build_error "The specified domain is not associated with this account."
-  #
-  # catch err
-  #   throw build_error "Unable to access AWS Route 53.", err
-  #
-  # # Start building the params object for Route53 Record Set function.
-  # params =
-  #   ChangeBatch: {
-  #     Changes: [
-  #     {
-  #       Action: 'UPSERT',
-  #       ResourceRecordSet: {
-  #         Name: "#{url}",
-  #         Type: 'A'
-  #       }
+
+# Get the AWS HostedZoneID for the specified domain.
+get_hosted_zone_id = async (hostname, creds) ->
+  try
+    root_domain = get_root_domain hostname
+    AWS.config = set_aws_creds creds
+    r53 = new AWS.Route53()
+    list_zones = lift_object r53, r53.listHostedZones
+
+    data = yield list_zones {}
+
+    # Dig the ID out of an array, holding an object, holding the string we need.
+    return where( data.HostedZones, {Name:root_domain})[0].Id
+
+  catch error
+    return build_error "Unable to access AWS Route 53.", error
+
+
+
+# Get the IP address currently associated with the hostname.
+get_record_ip_address = async (hostname, zone_id, creds) ->
+  try
+    AWS.config = set_aws_creds creds
+    r53 = new AWS.Route53()
+    list_records = lift_object r53, r53.listResourceRecordSets
+
+    data = yield list_records {HostedZoneId: zone_id}
+
+    # We need to conduct a little parsing to extract the IP address of the record set.
+    record = where data.ResourceRecordSets, {Name:hostname}
+    return record[0].ResourceRecords[0].Value
+
+  catch error
+    return build_error "Unable to access AWS Route 53.", error
+
+
+
+# Associate the cluster's IP address with a domain the user owns via Route 53.
+set_hostname = async (options, creds) ->
+  try
+    # Construct the "params" object that is used directly by the AWS method.
+    zone_id = yield get_hosted_zone_id( options.hostname, creds)
+    old_ip_address = yield get_record_ip_address( options.hostname, zone_id, creds)
+
+    # The params object contains "Changes", an array of actions to take on the DNS
+    # records.  Here we delete the old record and add the new IP address.
+
+    # TODO: When we establish an Elastic Load Balancer solution, we
+    # will need to the "AliasTarget" sub-object here.
+    params =
+      HostedZoneId: zone_id
+      ChangeBatch:
+        Changes: [
+          {
+            Action: "DELETE",
+            ResourceRecordSet:
+              Name: options.hostname,
+              Type: "A",
+              TTL: 60,
+              ResourceRecords: [
+                {
+                  Value: old_ip_address
+                }
+              ]
+          }
+          {
+            Action: "CREATE",
+            ResourceRecordSet:
+              Name: options.hostname,
+              Type: "A",
+              TTL: 60,
+              ResourceRecords: [
+                {
+                  Value: options.ip_address
+                }
+              ]
+          }
+        ]
+
+    # We are ready to access AWS.
+    AWS.config = set_aws_creds creds
+    r53 = new AWS.Route53()
+    change_record = lift_object r53, r53.changeResourceRecordSets
+
+    data = yield change_record params
+    return build_success "The domain \"#{options.hostname}\" has been assigned to #{options.ip_address}.", data
+
+  catch error
+    return build_error "Unable to assign the cluster's IP address to the designated hostname.", error
+
 
 
 # Using Private DNS from Route 53, we need to give the cluster a private DNS
 # so services may be referenced with human-friendly names.
-launch_dns = async (domain, creds) ->
+launch_private_dns = async (domain, creds) ->
   try
 
   catch error
@@ -352,7 +498,7 @@ launch_dns = async (domain, creds) ->
 prepare_launch_repository = async (config) ->
   try
     command =
-      "ssh core@#{config.cluster_url} << EOF\n" +
+      "ssh core@#{config.hostname} << EOF\n" +
       "mkdir services\n" +
       "EOF"
 
@@ -363,14 +509,14 @@ prepare_launch_repository = async (config) ->
     return build_error "Unable to install the Launch Repository.", error
 
 # Helper function that launches a single unit from PandaCluster's library onto the cluster.
-launch_service_unit = async (name, cluster_url) ->
+launch_service_unit = async (name, hostname) ->
   try
     # Place a copy of the customized unit file on the cluster.
-    execute "scp #{__dirname}/services/#{name}  core@#{cluster_url}:/home/core/services/."
+    execute "scp #{__dirname}/services/#{name}  core@#{hostname}:/home/core/services/."
 
     # Launch the service
     command =
-      "ssh core@#{cluster_url} << EOF\n" +
+      "ssh core@#{hostname} << EOF\n" +
       "fleetctl start services/#{name}\n" +
       "EOF"
 
@@ -403,25 +549,31 @@ launch_hook_server = async (config) ->
 #      after: config.after || "skydns.service"
 
     # Launch
-    yield launch_service_unit "hook-server.service", config.cluster_url
+    yield launch_service_unit "hook-server.service", config.hostname
 
   catch error
     return build_error "Unable to install hook-server into cluster.", error
 
 
-# After cluster formation is complete, optionally launch a variety of services
+# After cluster formation is complete, launch a variety of services
 # into the cluster from a library of established unit-files and AWS commands.
 customize_cluster = async (options, creds) ->
   try
-    # Options that use AWS interface.
-    yield set_cluster_url options.cluster_url, creds  if options.cluster_url?
-    yield launch_dns options.dns, creds               if options.dns?
+    # Gather success data as we go.
+    data = {}
 
-    # Options that use CoreOS service units.
-    yield prepare_launch_repository options
-    # FIXME: where is the options.hook_server object set?
-    yield launch_hook_server options.hook_server      if options.hook_server?
+    if options.hostname?
+      data.set_hostname = yield set_hostname options, creds
+      # Wait 60s for the DNS records to finish updating.
+      yield pause 65000
+    else
+      options.hostname = options.ip_address
 
+    #data.launch_private_dns = yield launch_private_dns options, creds
+    #data.prepare_launch_repository = yield prepare_launch_repository options
+    #data.launch_hook_server = yield launch_hook_server options
+
+    return build_success "Cluster customizations are complete.", data
 
   catch error
     return build_error "Unable to properly configure cluster.", error
@@ -454,56 +606,24 @@ module.exports =
     credentials.region = options.region || credentials.region
 
     try
-      # Build the "params" object that is used directly by the AWS "createStack" method.
-      params = {}
-      params.StackName = options.stack_name
-      params.OnFailure = "DELETE"
-      params.TemplateBody = yield build_template options
+      # Make calls to Amazon's API. Gather data as we go.
+      data = {}
+      data.launch_stack = yield launch_stack( options, credentials)
+      data.detect_formation = yield detect_formation( options, credentials)
 
-      #---------------------------------------------------------------------------
-      # Parameters is a map of key/values custom defined for this stack by the
-      # template file.  We will now fill out the map as specified or with defaults.
-      #---------------------------------------------------------------------------
-      params.Parameters = [
+      # Now that the cluster is fully formed, grab its IP address for later.
+      options.ip_address = yield get_cluster_ip_address( options, credentials)
 
-        { # InstanceType
-          "ParameterKey": "InstanceType"
-          "ParameterValue": options.instance_type || "m3.medium"
-        }
+      # Continue setting up the cluster.
+      data.customize_cluster = yield customize_cluster( options, credentials)
 
-        { # ClusterSize
-          "ParameterKey": "ClusterSize"
-          "ParameterValue": options.cluster_size || "3"
-        }
 
-        { # DiscoveryURL - Grab a randomized URL from etcd's free discovery service.
-          "ParameterKey": "DiscoveryURL"
-          "ParameterValue": yield get_discovery_url()
-        }
-
-        { # KeyPair
-          "ParameterKey": "KeyPair"
-          "ParameterValue": options.key_pair if yield validate_key_pair( options.key_pair, credentials)
-        }
-
-        # AdvertisedIPAddress - uses default "private",    TODO: Add this option
-        # AllowSSHFrom        - uses default "everywhere", TODO: Add this option
-      ]
-
-      #---------------------
-      # Access AWS
-      #---------------------
-      # With everything in place, we may finally make a call to Amazon's API.
-      # Gather data as we go.
-      data =
-        launch_stack: yield launch_stack( params, credentials)
-        detect_formation: yield detect_formation( options.stack_name, credentials)
-        customize_cluster: yield customize_cluster( options, credentials)
-
+      console.log JSON.stringify data, null, '\t'
       return build_success "The requested cluster is online, configured, and ready.",
         data, 201
 
     catch error
+      console.log JSON.stringify error, null, '\t'
       return build_error "Apologies. The requested cluster cannot be created.", error
 
 
