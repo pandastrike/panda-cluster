@@ -133,14 +133,24 @@ add_unit = (cloud_config, unit) ->
     cloud_config.push "        " + content[0] + "\n"
     content.shift()
 
+    
   return cloud_config
 
 
+templatize = (relative_read_path, relative_write_path, data) ->
+  # Read in template file
+  hook_server_template = read( resolve( __dirname, relative_read_path))
+  # Turn file into interpolated string
+  results_text = mustache.render hook_server_template.toString(), data
+  # Write interpolated string to file
+  # FIXME: need to use async and lift file read/write
+  write resolve(relative_write_path), results_text
+  true
 
 # Creates format-ephemeral.service from template.
 # Defaults drive path to /dev/xvdb
-prepare_ephemeral_drive = async (drive_path) ->
-  drive_path |= "/dev/xvdb"
+prepare_ephemeral_drive_template = (drive_path) ->
+  drive_path = drive_path || "/dev/xvdb"
   templatize "services/format-ephemeral.template", "src/services/format-ephemeral.service",
     drive_path: drive_path
   # FIXME: return properly , will need async and lift for templatizing
@@ -148,8 +158,8 @@ prepare_ephemeral_drive = async (drive_path) ->
 
 # Creates var-lib-docker.mount from template.
 # Defaults drive path to /dev/xvdb
-prepare_docker_mount = async (drive_path) ->
-  drive_path |= "/dev/xvdb"
+prepare_docker_mount_template = (drive_path) ->
+  drive_path = drive_path || "/dev/xvdb"
   templatize "services/var-lib-docker.template", "src/services/var-lib-docker.mount",
     drive_path: drive_path
   # FIXME: return properly , will need async and lift for templatizing
@@ -158,24 +168,19 @@ prepare_docker_mount = async (drive_path) ->
 # Build an AWS CloudFormation template by augmenting the official ones released
 # by CoreOS.  Return a JSON string.
 build_template = async (options) ->
-  console.log "build template options: #{JSON.stringify(options, undefined, 2)}"
   try
     # Pull official CoreOS template as a JSON object.
     template_object = yield pull_cloud_template options
-    console.log "template object: #{JSON.stringify(template_object, undefined, 2)}"
 
     # Isolate the cloud-config array within the JSON object.
     user_data = template_object.Resources.CoreOSServerLaunchConfig.Properties.UserData
     cloud_config = user_data["Fn::Base64"]["Fn::Join"][1]
-    console.log "template object: #{JSON.stringify template_object}"
     # Add the specified units to the cloud-config section.
 
-    # Creates .service and .mount files from templates.
+    # Creates .service and .mount files from templates, even if files not used.
     # Defaults to creating a service file with drive /dev/xvdb.
-    if "format-ephemeral.service" in options.formation_units
-      prepare_ephemeral_drive options.ephemeral_drive
-    if "var-lib-docker.mount" in options.formation_units
-      prepare_docker_mount options.ephemeral_drive
+    prepare_ephemeral_drive_template options.ephemeral_drive
+    prepare_docker_mount_template options.ephemeral_drive
 
     unless options.formation_units == []
       for x in options.formation_units
@@ -375,6 +380,14 @@ launch_service_unit = async (name, cluster_url) ->
     return build_error "Unable to launch service unit.", error
 
 
+# Creates hook-server.service from template.
+# Defaults drive path to /dev/xvdb
+prepare_hook_server_template = ({ssh_keys, after}) ->
+  drive_path = drive_path || "/dev/xvdb"
+  templatize "services/format-ephemeral.template", "src/services/format-ephemeral.service",
+    drive_path: drive_path
+  # FIXME: return properly , will need async and lift for templatizing
+  true
 
 # Place a hook-server on the cluster that will respond to users' git commands
 # and launch githook scripts.  The hook-server is loaded with all cluster public keys.
@@ -437,7 +450,6 @@ module.exports =
 
   # This method creates and starts a CoreOS cluster.
   create: async (options) ->
-    console.log "create options: #{JSON.stringify(options, undefined, 2)}"
     credentials = options.aws
     credentials.region = options.region || credentials.region
 
@@ -521,12 +533,4 @@ module.exports =
       return build_error "Apologies. The targeted cluster has not been destroyed.", error
 
   
-  templatize: (relative_read_path, relative_write_path, data) ->
-    # Read in template file
-    hook_server_template = read( resolve( __dirname, relative_read_path))
-    # Turn file into interpolated string
-    results_text = mustache.render hook_server_template.toString(), data
-    # Write interpolated string to file
-    # FIXME: need to use async and lift file read/write
-    write resolve(relative_write_path), results_text
-    true
+  templatize: templatize

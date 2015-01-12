@@ -21,8 +21,20 @@ catch error
 options =
   public_keys: aws.public_keys
   stack_name: "peter-cli-test"
+  #ephemeral_drive: "/dev/xvdb"
   key_pair: "peter"
-  formation_units: ["format-ephemeral.service", "var-lib-docker.mount"]
+  formation_units: [
+    {
+      name: "format-ephemeral.service"
+      runtime: true
+      command: "start",
+    },
+    {
+      name: "var-lib-docker.mount"
+      runtime: true
+      command: "start"
+    }
+  ]
   aws: aws.aws
 
 call ->
