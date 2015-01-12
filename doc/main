@@ -6,5 +6,6 @@ Follow any command with "help" for more information.
 A tool to manage CoreOS clusters and deploy them on AWS with your account.
 
 Commands:
-   create    Spins up a cluster of the requested size.
-   destroy   Terminates the specified cluster.
+   build-template Builds an AWS CloudFormation template using ones released by CoreOS
+   create         Spins up a cluster of the requested size using your AWS access.
+   destroy        Terminates the specified cluster.

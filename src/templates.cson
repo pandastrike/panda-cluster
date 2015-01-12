@@ -1,3 +1,11 @@
+#===============================================================================
+# PandaCluster - CoreOS Image Templates
+#===============================================================================
+# This CSON object specifies CoreOS cloud images for PV and HVM machines that's
+# used in pandacluster.coffee's `pull_cloud_template` method.  The values
+# "stable", "beta", and "alpha" are validated in argument_definitions.cson.
+# pandacluster.coffee currently defaults to "stable" and "pv".
+
 stable:
   pv: "https://s3.amazonaws.com/coreos.com/dist/aws/coreos-stable-pv.template"
   hvm: "https://s3.amazonaws.com/coreos.com/dist/aws/coreos-stable-hvm.template"
