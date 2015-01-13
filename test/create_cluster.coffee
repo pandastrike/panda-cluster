@@ -21,7 +21,7 @@ catch error
 options =
   public_keys: aws.public_keys
   stack_name: "peter-cli-test"
-  #ephemeral_drive: "/dev/xvdb"
+  ephemeral_drive: "/dev/xvdb"
   key_pair: "peter"
   formation_units: [
     {
@@ -49,31 +49,29 @@ call ->
     res = yield pandacluster.create options
     {status, message, code, details} = res
     assert.equal status, "success"
-    assert.equal message, "Create cluster pretty successful"
+    assert.equal message, "The requested cluster is online, configured, and ready."
     assert.equal error, null
-    assert.ok data.launch_res
-    assert.ok data.detect_res
 
 
   catch error
     assert.throws error, null, "Create cluster failed"
     console.log error
 
-##  fixtures = nock.recorder.play()
-##  console.log "fixtures : #{JSON.stringify(fixtures, undefined, 2)}"
-#
-#
-#  try
-#    res = yield pandacluster.destroy options
-#    console.log res
-#    {status, message, error, data} = res
-#    assert.equal status, "in progress"
-#    assert.equal message, "Cluster destruction in progress"
-#    assert.equal error, null
-#    assert.ok data.destroy_cluster.ResponseMetaData.RequestId
-#
-#  catch error
-#    assert.fail error, null, "Destroy cluster failed"
+#  fixtures = nock.recorder.play()
+#  console.log "fixtures : #{JSON.stringify(fixtures, undefined, 2)}"
+
+
+  try
+    res = yield pandacluster.destroy options
+    console.log res
+    {status, message, error, data} = res
+    assert.equal status, "in progress"
+    assert.equal message, "Cluster destruction in progress"
+    assert.equal error, null
+    assert.ok data.destroy_cluster.ResponseMetaData.RequestId
+
+  catch error
+    assert.fail error, null, "Destroy cluster failed"
 
 
 

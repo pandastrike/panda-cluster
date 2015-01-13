@@ -4,5 +4,5 @@ Description=Formats the ephemeral drive
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/sbin/wipefs -f {{drive_path}}
-ExecStart=/usr/sbin/mkfs.btrfs -f {{drive_path}}
+ExecStart=/usr/sbin/wipefs -f {{{drive_path}}}
+ExecStart=/usr/sbin/mkfs.btrfs -f {{{drive_path}}}
