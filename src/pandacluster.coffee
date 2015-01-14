@@ -108,6 +108,8 @@ pull_cloud_template = async ({channel, virtualization}) ->
   catch error
     return build_error "Unable to access AWS template stores belonging to CoreOS", error
 
+
+
 # Add unit to the cloud-config section of the AWS template.
 add_unit = (cloud_config, unit) ->
   # The cloud-config file is stored as an array of strings inside the "UserData"
@@ -138,11 +140,38 @@ add_unit = (cloud_config, unit) ->
 
 # Build an AWS CloudFormation template by augmenting the official ones released
 # by CoreOS.  Return a JSON string.
-build_template = async (options) ->
+build_template = async (options, creds) ->
   try
     # Pull official CoreOS template as a JSON object.
     template_object = yield pull_cloud_template options
 
+    #-----------------------------------------------------
+    # Establish And Configure Virtual Private Cloud (VPC)
+    #-----------------------------------------------------
+    # Isolate the "Resources" object within the JSON template object.
+    resources = template_object.Resources
+
+    # Add an object specifying a VPC.
+    resources["VPC"] =
+      Type: "AWS::EC2::VPC"
+      Properties:
+        CidrBlock: "10.0.0.0/16"
+        EnableDnsSupport: true
+        EnableDnsHostnames: true
+        Tags: [
+          {
+            Key: "VPC-Name"
+            Value: options.stack_name
+          }
+        ]
+
+    # Place this object back into the JSON object.
+    template_object.Resources = resources
+
+
+    #----------------------------
+    # Cloud-Config Modifications
+    #----------------------------
     # Isolate the cloud-config array within the JSON object.
     user_data = template_object.Resources.CoreOSServerLaunchConfig.Properties.UserData
     cloud_config = user_data["Fn::Base64"]["Fn::Join"][1]
@@ -207,7 +236,7 @@ launch_stack = async (options, creds) ->
     params = {}
     params.StackName = options.stack_name
     params.OnFailure = "DELETE"
-    params.TemplateBody = yield build_template options
+    params.TemplateBody = yield build_template options, creds
 
     #---------------------------------------------------------------------------
     # Parameters is a map of key/values custom defined for this stack by the
@@ -265,7 +294,7 @@ get_formation_status = async (name, creds) ->
     data.StackEvents[0].ResourceStatus == "CREATE_COMPLETE"
       return build_success "The cluster is confirmed to be online and ready.", data
 
-    else if data.StackEvents.ResourceStatus == "CREATE_FAILED"
+    else if data.StackEvents[0].ResourceStatus == "CREATE_FAILED"
       return build_error "AWS CloudFormation returned status \"CREATE_FAILED\".", data
 
     else
@@ -295,6 +324,8 @@ detect_formation = async (options, creds) ->
 # Cluster Customization
 #-------------------------
 
+# Return the public facing IP address of a single machine from the cluster we just
+# created.
 get_cluster_ip_address = async (options, creds) ->
     AWS.config = set_aws_creds creds
     ec2 = new AWS.EC2()
@@ -445,10 +476,51 @@ set_hostname = async (options, creds) ->
 
 
 
+
+
+# Get the ID of the VPC we just created for the cluster.  In the CloudFormation
+# template, we specified a VPC that is tagged with the cluster's StackName.
+get_cluster_vpc_id = async (options, creds) ->
+  AWS.config = set_aws_creds creds
+  ec2 = new AWS.EC2()
+  describe_vpcs = lift_object ec2, ec2.describeVpcs
+
+  params =
+    Filters: [
+      Name: "tag:VPC-Name"
+      Values: [
+        options.stack_name
+      ]
+    ]
+
+  try
+    data = yield describe_vpcs params
+    # Dig the VPC ID out of the data object and return it.
+    return data.Vpcs[0].VpcId
+
+  catch error
+    return build_error "Unable to access AWS EC2.", error
+
+
+
 # Using Private DNS from Route 53, we need to give the cluster a private DNS
 # so services may be referenced with human-friendly names.
-launch_private_dns = async (domain, creds) ->
+launch_private_dns = async (options, creds) ->
   try
+    vpc_id = yield get_cluster_vpc_id options, creds
+    AWS.config = set_aws_creds creds
+    r53 = new AWS.Route53()
+    create_zone = lift_object r53, r53.createHostedZone
+
+    params =
+      CallerReference: "caller_reference_#{options.dns}"
+      Name: options.dns
+      VPC:
+        VPCId: vpc_id
+        VPCRegion: creds.region
+
+    data = yield create_zone params
+    return build_success "The Cluster's private DNS has been established.", data
 
   catch error
     return build_error "Unable to establish the cluster's private DNS.", error
@@ -460,10 +532,10 @@ launch_private_dns = async (domain, creds) ->
 # Prepare the cluster to accept services by installing a directory called "launch".
 # launch acts as a repository where each service will have its own sub-directory
 # containing a Dockerfile, *.service file, and anything else it needs.
-prepare_launch_repository = async (config) ->
+prepare_launch_repository = async (options) ->
   try
     command =
-      "ssh core@#{config.hostname} << EOF\n" +
+      "ssh core@#{options.hostname} << EOF\n" +
       "mkdir services\n" +
       "EOF"
 
@@ -493,8 +565,10 @@ launch_service_unit = async (name, hostname) ->
 
 # Place a hook-server on the cluster that will respond to users' git commands
 # and launch githook scripts.  The hook-server is loaded with all cluster public keys.
-launch_hook_server = async (config) ->
+launch_hook_server = async (options) ->
   try
+    config = options.hook_server
+
     # Customize the hook-server unit file template.
     # Add public SSH keys.
 
@@ -519,7 +593,7 @@ customize_cluster = async (options, creds) ->
     else
       options.hostname = options.ip_address
 
-    #data.launch_private_dns = yield launch_private_dns options, creds
+    data.launch_private_dns = yield launch_private_dns options, creds
     #data.prepare_launch_repository = yield prepare_launch_repository options
     #data.launch_hook_server = yield launch_hook_server options
 
