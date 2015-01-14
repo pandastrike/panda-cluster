@@ -45,12 +45,17 @@ build_success = (message, data, code) ->
     details: data       if data?
   }
 
-# Create a version of ShellJS's "exec" command with built-in error handling.
+# Create a version of ShellJS's "exec" command with built-in error handling.  In
+# PandaCluster, we regularly use "exec" with SSH commands and other longish-running
+# processes, so we want to wrap "exec" in a promise and use "yield" statements.
 execute = (command) ->
-  exec command
+  promise (resolve, reject) ->
+    exec command, (code, output) ->
+      if code == 0
+        resolve build_success "ShellJS successfully executed the specified shell command.", output
+      else
+        resolve build_error "ShellJS failed to execute shell command.", error()
 
-  if error()?
-    return build_error "ShellJS failed to execute shell command.", error()
 
 
 # Allow "when" to lift AWS module functions, which are non-standard.
@@ -536,11 +541,11 @@ prepare_launch_repository = async (options) ->
   try
     command =
       "ssh core@#{options.hostname} << EOF\n" +
-      "mkdir services\n" +
+      "mkdir launch\n" +
       "EOF"
 
-    execute command
-    return build_success "The Launch Repository is ready."
+    output = yield execute command
+    return build_success "The Launch Repository is ready.", output
 
   catch error
     return build_error "Unable to install the Launch Repository.", error
@@ -553,7 +558,7 @@ launch_service_unit = async (name, hostname) ->
 
     # Launch the service
     command =
-      "ssh core@#{hostname} << EOF\n" +
+      "ssh -o \"StrictHostKeyChecking no\" core@#{hostname} << EOF\n" +
       "fleetctl start services/#{name}\n" +
       "EOF"
 
@@ -594,7 +599,7 @@ customize_cluster = async (options, creds) ->
       options.hostname = options.ip_address
 
     data.launch_private_dns = yield launch_private_dns options, creds
-    #data.prepare_launch_repository = yield prepare_launch_repository options
+    data.prepare_launch_repository = yield prepare_launch_repository options
     #data.launch_hook_server = yield launch_hook_server options
 
     return build_success "Cluster customizations are complete.", data
@@ -633,15 +638,15 @@ module.exports =
     try
       # Make calls to Amazon's API. Gather data as we go.
       data = {}
-      data.launch_stack = yield launch_stack( options, credentials)
-      data.detect_formation = yield detect_formation( options, credentials)
+      #data.launch_stack = yield launch_stack( options, credentials)
+      #data.detect_formation = yield detect_formation( options, credentials)
 
       # Now that the cluster is fully formed, grab its IP address for later.
-      options.ip_address = yield get_cluster_ip_address( options, credentials)
+      #options.ip_address = yield get_cluster_ip_address( options, credentials)
 
       # Continue setting up the cluster.
-      data.customize_cluster = yield customize_cluster( options, credentials)
-
+      #data.customize_cluster = yield customize_cluster( options, credentials)
+      data.test = yield prepare_launch_repository options
 
       console.log JSON.stringify data, null, '\t'
       return build_success "The requested cluster is online, configured, and ready.",
