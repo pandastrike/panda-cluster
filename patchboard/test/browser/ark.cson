@@ -1,0 +1,24 @@
+root: "."
+include: [
+  "package.json"
+  "application.coffee"
+
+  "node_modules/testify/package.json"
+  "node_modules/testify/**/*.{js,coffee,json,cson}"
+
+  "node_modules/patchboard-js/package.json"
+  "node_modules/patchboard-js/**/*.{js,coffee,json,cson}"
+]
+exclude: [
+  "**/*LICENSE*"
+  "**/*.md"
+  "**/coffee-script/**"
+  "**/bin/**"
+  "**/test/**"
+  "**/tests/**"
+  "**/spec/**"
+]
+apis: [
+  "assert", "http", "https", "fs", "module", "util", "path", "url", "events",
+  "querystring", "stream", "crypto"
+]

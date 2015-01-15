@@ -1,19 +1,19 @@
 {
-  "name": "github-patchboard",
-  "description": "example usage of patchboard, against GitHub API",
+  "name": "trivial",
+  "description": "A Trivia Game API",
   "author": "Matthew King",
-  "private": true,
   "version": "0.1.0",
-
+  "bin": "./server.coffee",
+  "files": [
+    "bin/",
+    "src/",
+    "schema.json"
+  ],
   "dependencies": {
-    "patchboard-js": "git+ssh://git@github.com:automatthew/patchboard-js.git#github_support"
+    "patchboard": "0.4.11",
+    "patchboard-js": "0.4.5"
   },
   "devDependencies": {
-    "testify": ">=0.2.8"
+    "testify": "0.2.x"
   }
 }
-
-
-
-
-

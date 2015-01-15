@@ -70,3 +70,14 @@ Sample files for CoreOS systemd configuration.  The `build_template` method in `
   - Prepares the ephemeral drive for mounting by wiping the volume with wipefs and then formatting with mkfs.btrfs.
 5. var-lib-docker.mount
   - Mounts the formatted ephemeral drive to /var/lib/docker.mount
+
+
+
+## pandacluster.coffee
+------------------
+
+
+## patchboard
+------------------
+
+API server to handle 
