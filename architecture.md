@@ -73,8 +73,6 @@ Sample files for CoreOS systemd configuration.  The `build_template` method in `
 
 ## pandacluster.coffee
 ------------------
-destroy:
-  1. Destroys cluster specified by name
 create:
   1. Launches cluster
     - Build an AWS CloudFormation template object by augmenting the official ones released by CoreOS:
@@ -93,6 +91,8 @@ create:
   3. Retrieves cluster IP address
   4. Customizes cluster
   5. Returns a success or failure object with data composed of the previous four steps.
+destroy:
+  1. Destroys cluster specified by name
 
 ## patchboard
 ------------------
