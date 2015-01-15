@@ -9,26 +9,26 @@ module.exports =
     cluster:
       mediaType: media_type "cluster"
 
-#    user:
-#      extends: {$ref: "urn:patchboard#resource"}
-#      mediaType: media_type "user"
-#      properties:
-#        login:
-#          required: true
-#          type: "string"
-#          pattern: "^[a-zA-z0-9_.]{3,32}"
-#        email:
-#          type: "string"
-#          format: "email"
-#        password:
-#          type: "string"
-#          minLength: 4
-#          maxLength: 64
-#        questions: {$ref: "#questions"}
-#        answered:
-#          type: "array"
-#          items: {$ref: "#question"}
-#
+    user:
+      extends: {$ref: "urn:patchboard#resource"}
+      mediaType: media_type "user"
+      properties:
+        login:
+          required: true
+          type: "string"
+          pattern: "^[a-zA-z0-9_.]{3,32}"
+        email:
+          type: "string"
+          format: "email"
+        password:
+          type: "string"
+          minLength: 4
+          maxLength: 64
+        questions: {$ref: "#questions"}
+        answered:
+          type: "array"
+          items: {$ref: "#question"}
+
 #    questions:
 #      mediaType: media_type "questions"
 #      extends: {$ref: "urn:patchboard#resource"}

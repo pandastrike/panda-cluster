@@ -15,5 +15,8 @@
   },
   "devDependencies": {
     "testify": "0.2.x"
+  },
+  "engines": {
+    "node": ">=0.11.2"
   }
 }

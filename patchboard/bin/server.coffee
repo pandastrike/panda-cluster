@@ -6,7 +6,10 @@ application = require "../../src/pandacluster"
 
 [interpreter, script, data_file] = process.argv
 
-handlers = require("../src/handlers")(application)
+Datastore = require "nedb"
+database = new Datastore()
+
+handlers = require("../src/handlers")(application, database)
 
 
 ## Playing with new setup usage.

@@ -1,4 +1,4 @@
-module.exports = (application) ->
+module.exports = (application, database) ->
 
   response_callback = (context) ->
     context.set_cors_headers "*"
@@ -12,23 +12,45 @@ module.exports = (application) ->
         context.respond status, result
 
   clusters:
-    create: (context) ->
-      application.create context.request.body, response_callback(context)
+    # FIXME: figure out async
+    create: async (context) ->
+      {account, cluster_name} = context.request.body
+      rand_url = Math.random().toString(36).substring(20)
+      try
+        updated_doc = database.update { account: account.email },
+          { $set: { "clusters.#{cluster_name}": rand_url } },
+          { multi: false }
+        # FIXME: properly return the URL to destroy this cluster
+        context.rand_url = context.url + "/clusters/destroy/#{rand_url}"
+        application.create context.request.body, response_callback(context)
+      catch
+        context.error 500, "something done broke"
+    destroy: async (context) ->
+      # FIXME: should rand_url actually be in the url if you also need to send token anyway
+      # FIXME: mappings.coffee: how to allow both set path and template path with var :url
+      {account, cluster_name, url} = context.request.body
+      try
+        doc = database.findOne { account: account.email, "account.clusters.#{cluster_name}": url },
+        application.destroy context.request.body, response_callback(context)
+      catch
+        context.error 500, "something done broke"
 
-#  users:
-#    create: (context) ->
-#      application.create_user context.request.body, response_callback(context)
-#
-#  user_search:
-#    get: (context) ->
-#      application.user_search context.request.query, response_callback(context)
-#
-#  user:
-#    get: (context) ->
-#      application.get_user context.match.path.id, response_callback(context)
-#    delete: (context) ->
-#      application.delete_user context.match.path.id, response_callback(context)
-#
+  users:
+    create: async (context) ->
+      try
+        {email} = context.request.body.account
+        account = database.insert { "accounts.#{email}": context.request.body }
+        application.create context.request.body, response_callback(context)
+      catch
+        context.error 500, "something done broke"
+
+  # TODO: support get and delete user? 
+  user:
+    get: (context) ->
+      application.get_user context.match.path.id, response_callback(context)
+    delete: (context) ->
+      application.delete_user context.match.path.id, response_callback(context)
+
 #  questions:
 #    ask: (context) ->
 #      context.set_cors_headers "*"

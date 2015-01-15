@@ -19,3 +19,30 @@ module.exports =
         response:
           type: type "cluster"
           status: 200
+
+  users:
+    actions:
+      create:
+        method: "POST"
+        request:
+          type: type "user"
+        response:
+          type: type "user"
+          status: 201
+      delete:
+        method: "POST"
+        request:
+          type: type "user"
+        response:
+          type: type "user"
+          status: 200
+
+  user:
+    actions:
+      get:
+        method: "GET"
+        request:
+          type: type "user"
+        response:
+          type: type "user"
+          status: 200
