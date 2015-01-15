@@ -3,7 +3,6 @@ architecture.md
 api-guide.md
 unit-guide.md
 
-main.coffee (?)
 
 # architecture
 ------------------
@@ -59,7 +58,6 @@ Contains the --help text provided for the CLI commands as used by `src/cli.coffe
 
 Sample files for CoreOS systemd configuration.  The `build_template` method in `src/pandacluster.coffee` takes in a `units` .cson filepath option that references .service files.  These systemd unit files with .service extensions run cron-like processes.
 
-
 1. unit-config.cson
   - # TODO
 2. docker-tcp.service
@@ -70,3 +68,33 @@ Sample files for CoreOS systemd configuration.  The `build_template` method in `
   - Prepares the ephemeral drive for mounting by wiping the volume with wipefs and then formatting with mkfs.btrfs.
 5. var-lib-docker.mount
   - Mounts the formatted ephemeral drive to /var/lib/docker.mount
+
+
+
+## pandacluster.coffee
+------------------
+destroy:
+  1. Destroys cluster specified by name
+create:
+  1. Launches cluster
+    - Build an AWS CloudFormation template object by augmenting the official ones released by CoreOS:
+        a) Pulls official CoreOS template and saves as JSON object
+        b) Creates unit files by interpolating templated config files (.service and .mount files) with argument-specified data or sensible defaults.
+        d) Adds specified unit files to object
+        c) Adds specified public keys to object
+    - Creates object with attributes:
+        a) AWS CloudFormation template mentioned above
+        b) EC2 instance type
+        c) Cluster size (defaulted to three)
+        d) Randomized discovery URL for etcd
+        e) SSH public key
+    - Calls AWS JavaScript SDK's Cloudformation.createStack with above object.
+  2. Polls for successful cluster creation
+  3. Retrieves cluster IP address
+  4. Customizes cluster
+  5. Returns a success or failure object with data composed of the previous four steps.
+
+## patchboard
+------------------
+
+API server to handle
