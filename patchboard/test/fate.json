@@ -1,7 +1,0 @@
-{
-  "commands": {
-    "api_server": "bin/server.coffee test/data/questions.json"
-  }
-}
-
-

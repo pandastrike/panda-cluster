@@ -1,8 +1,0 @@
-
-
-task "build" do
-  ark = "./node_modules/.bin/ark"
-  sh "#{ark} ls > list.txt"
-  sh "#{ark} package -o bundle.js"
-  sh "ls -lh bundle.js"
-end
