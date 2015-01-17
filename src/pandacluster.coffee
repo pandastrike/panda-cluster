@@ -37,11 +37,10 @@ build_error = (message, details) ->
   return error
 
 # Create a success object that reports data to user.
-build_success = (message, data, code) ->
+build_success = (message, data) ->
   return {
     message: message
     status: "success"
-    code: code          if code?
     details: data       if data?
   }
 
@@ -54,7 +53,7 @@ execute = (command) ->
       if code == 0
         resolve build_success "ShellJS successfully executed the specified shell command.", output
       else
-        resolve build_error "ShellJS failed to execute shell command.", error()
+        resolve build_error "ShellJS failed to execute shell command."
 
 
 
@@ -68,6 +67,20 @@ pause = (duration) ->
   promise (resolve, reject) ->
     callback = -> resolve()
     setTimeout callback, duration
+
+poll_until_true = async (func, options, creds, duration, message) ->
+  try
+
+    while true
+      status = yield func options, creds
+      if status
+        return status         # Complete.
+      else
+        yield pause duration  # Not complete. Keep going.
+
+  catch error
+    return build_error message, error
+
 
 # Promise wrapper around Node's https module. Makes GET calls into promises.
 https_get = (url) ->
@@ -287,20 +300,21 @@ launch_stack = async (options, creds) ->
 
 # This function checks the specified AWS stack to see if its formation is complete.
 # It returns either true or false, and throws an exception if an AWS error is reported.
-get_formation_status = async (name, creds) ->
+get_formation_status = async (options, creds) ->
   AWS.config = set_aws_creds creds
   cf = new AWS.CloudFormation()
   describe_events = lift_object cf, cf.describeStackEvents
 
   try
-    data = yield describe_events {StackName: name}
+    data = yield describe_events {StackName: options.stack_name}
 
     if data.StackEvents[0].ResourceType == "AWS::CloudFormation::Stack" &&
     data.StackEvents[0].ResourceStatus == "CREATE_COMPLETE"
       return build_success "The cluster is confirmed to be online and ready.", data
 
-    else if data.StackEvents[0].ResourceStatus == "CREATE_FAILED"
-      return build_error "AWS CloudFormation returned status \"CREATE_FAILED\".", data
+    else if data.StackEvents[0].ResourceStatus == "CREATE_FAILED" ||
+    data.StackEvents[0].ResourceStatus == "DELETE_IN_PROGRESS"
+      return build_error "AWS CloudFormation returned unsuccessful status.", data
 
     else
       return false
@@ -308,21 +322,6 @@ get_formation_status = async (name, creds) ->
   catch err
     return build_error "Unable to access AWS CloudFormation.", err
 
-
-# Cluster creation can take several minutes.  This function polls AWS until the
-# CoreOS cluster is fully formed and ready for additional instructions.
-detect_formation = async (options, creds) ->
-  try
-
-    while true
-      status = yield get_formation_status(options.stack_name, creds)
-      if status
-        return status     # The cluster formation complete.
-      else
-        yield pause 5000  # Not complete, keep going.
-
-  catch error
-    return build_error "Unable to detect cluster formation.", error
 
 
 #-------------------------
@@ -474,10 +473,33 @@ set_hostname = async (options, creds) ->
     change_record = lift_object r53, r53.changeResourceRecordSets
 
     data = yield change_record params
-    return build_success "The domain \"#{options.hostname}\" has been assigned to #{options.ip_address}.", data
+    return {
+      result: build_success "The domain \"#{options.hostname}\" has been assigned to #{options.ip_address}.", data
+      change_id: data.ChangeInfo.Id
+    }
 
   catch error
     return build_error "Unable to assign the cluster's IP address to the designated hostname.", error
+
+
+
+# This function checks the specified DNS record to see if its "INSYC", done updating.
+# It returns either true or false, and throws an exception if an AWS error is reported.
+get_hostname_status = async (change_id, creds) ->
+  AWS.config = set_aws_creds creds
+  r53 = new AWS.Route53()
+  get_change = lift_object r53, r53.getChange
+
+  try
+    data = yield get_change {Id: change_id}
+
+    if data.ChangeInfo.Status == "INSYNC"
+      return build_success "The DNS record is fully synchronized.", data
+    else
+      return false
+
+  catch err
+    return build_error "Unable to access AWS Route53.", err
 
 
 
@@ -518,29 +540,48 @@ launch_private_dns = async (options, creds) ->
     create_zone = lift_object r53, r53.createHostedZone
 
     params =
-      CallerReference: "caller_reference_#{options.dns}"
+      CallerReference: "caller_rference_#{options.dns}_#{new Date().getTime()}"
       Name: options.dns
       VPC:
         VPCId: vpc_id
         VPCRegion: creds.region
 
     data = yield create_zone params
-    return build_success "The Cluster's private DNS has been established.", data
+    return {
+      result: build_success "The Cluster's private DNS has been established.", data
+      change_id: data.ChangeInfo.Id
+    }
 
   catch error
     return build_error "Unable to establish the cluster's private DNS.", error
 
 
+# This function checks the specified Hosted Zone to see if its "INSYC", done updating.
+# It returns either true or false, and throws an exception if an AWS error is reported.
+get_private_dns_status = async (change_id, creds) ->
+    AWS.config = set_aws_creds creds
+    r53 = new AWS.Route53()
+    get_hosted_zone = lift_object r53, r53.getHostedZone
+
+    try
+      data = yield get_hosted_zone {Id: change_id}
+
+      if data.ChangeInfo.Status == "INSYNC"
+        return build_success "The private DNS is fully online.", data
+      else
+        return false
+
+    catch err
+      return build_error "Unable to access AWS Route53.", err
 
 
-
-# Prepare the cluster to accept services by installing a directory called "launch".
-# launch acts as a repository where each service will have its own sub-directory
+# Prepare the cluster to be self-sufficient by installing directory called "launch".
+# "launch" acts as a repository where each service will have its own sub-directory
 # containing a Dockerfile, *.service file, and anything else it needs.
-prepare_launch_repository = async (options) ->
+prepare_launch_directory = async (options) ->
   try
     command =
-      "ssh core@#{options.hostname} << EOF\n" +
+      "ssh -o \"StrictHostKeyChecking no\" core@#{options.hostname} << EOF\n" +
       "mkdir launch\n" +
       "EOF"
 
@@ -550,6 +591,16 @@ prepare_launch_repository = async (options) ->
   catch error
     return build_error "Unable to install the Launch Repository.", error
 
+
+# Prepare the cluster to be self-sufficient by installing the Kick API server. (short for sidekick).
+# It's a primative, meta API server that allows the cluster to alter itself independently
+# of a remote actor.  The Kick server is Dockerized and contains the library of all Huxley mixins.
+prepare_kick = async (options, creds) ->
+
+
+
+
+
 # Helper function that launches a single unit from PandaCluster's library onto the cluster.
 launch_service_unit = async (name, hostname) ->
   try
@@ -558,8 +609,8 @@ launch_service_unit = async (name, hostname) ->
 
     # Launch the service
     command =
-      "ssh -o \"StrictHostKeyChecking no\" core@#{hostname} << EOF\n" +
-      "fleetctl start services/#{name}\n" +
+      "ssh  core@#{hostname} << EOF\n" +
+      "fleetctl start launch/#{name}\n" +
       "EOF"
 
     execute command
@@ -591,15 +642,24 @@ customize_cluster = async (options, creds) ->
     # Gather success data as we go.
     data = {}
 
+    # Set the specified hostname to the cluster's IP address.
     if options.hostname?
-      data.set_hostname = yield set_hostname options, creds
-      # Wait 60s for the DNS records to finish updating.
-      yield pause 65000
+      {result, change_id} = yield set_hostname options, creds
+      data.set_hostname = result
+      data.detect_hostname = yield poll_until_true get_hostname_status, change_id,
+       creds, 5000, "Unable to detect DNS record change."
     else
+      data.set_hostname = build_success "No hostname specified, using cluster IP Address.", options.ip_address
       options.hostname = options.ip_address
 
-    data.launch_private_dns = yield launch_private_dns options, creds
-    data.prepare_launch_repository = yield prepare_launch_repository options
+    # Establish a private DNS service available only on the cluster.
+    {result, change_id} = yield launch_private_dns options, creds
+    data.launch_private_dns = result
+    data.detect_private_dns_formation = yield poll_until_true get_hostname_status,
+      change_id, creds, 5000, "Unable to detect Private DNS formation."
+
+    data.prepare_launch_directory = yield prepare_launch_directory options
+    #data.prepare_kick = yield prepare_kick options creds
     #data.launch_hook_server = yield launch_hook_server options
 
     return build_success "Cluster customizations are complete.", data
@@ -638,19 +698,21 @@ module.exports =
     try
       # Make calls to Amazon's API. Gather data as we go.
       data = {}
-      #data.launch_stack = yield launch_stack( options, credentials)
-      #data.detect_formation = yield detect_formation( options, credentials)
+      data.launch_stack = yield launch_stack(options, credentials)
+
+      # Monitor the cluster until it is fully deployed.
+      data.detect_formation = yield poll_until_true get_formation_status, options,
+       credentials, 5000, "Unable to detect cluster formation."
 
       # Now that the cluster is fully formed, grab its IP address for later.
-      #options.ip_address = yield get_cluster_ip_address( options, credentials)
+      options.ip_address = yield get_cluster_ip_address( options, credentials)
 
       # Continue setting up the cluster.
-      #data.customize_cluster = yield customize_cluster( options, credentials)
-      data.test = yield prepare_launch_repository options
+      data.customize_cluster = yield customize_cluster( options, credentials)
 
       console.log JSON.stringify data, null, '\t'
       return build_success "The requested cluster is online, configured, and ready.",
-        data, 201
+        data
 
 
     catch error
@@ -679,7 +741,7 @@ module.exports =
         destroy_cluster: yield destroy_cluster( params, credentials)
 
       return build_success "The targeted cluster has been destroyed.  All related resources have been released.",
-      data, 200
+      data
 
     catch error
       return build_error "Apologies. The targeted cluster has not been destroyed.", error
