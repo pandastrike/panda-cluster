@@ -1,7 +1,7 @@
 #===============================================================================
 # PandaCluster - Awesome Command-Line Tool and Library to Manage CoreOS Clusters
 #===============================================================================
-
+console.log "pandacluster.coffee in action, baby"
 #====================
 # Modules
 #====================
@@ -277,6 +277,7 @@ launch_stack = async (options, creds) ->
     params.StackName = options.stack_name
     params.OnFailure = "DELETE"
     params.TemplateBody = yield build_template options, creds
+    console.log "template body: ", params.TemplateBody
 
     #---------------------------------------------------------------------------
     # Parameters is a map of key/values custom defined for this stack by the
@@ -573,6 +574,7 @@ launch_private_dns = async (options, creds) ->
 # launch acts as a repository where each service will have its own sub-directory
 # containing a Dockerfile, *.service file, and anything else it needs.
 prepare_launch_repository = async (options) ->
+  console.log "prepare launch repo"
   try
     command =
       "ssh core@#{options.hostname} << EOF\n" +
@@ -580,6 +582,7 @@ prepare_launch_repository = async (options) ->
       "EOF"
 
     output = yield execute command
+    console.log "done prepare launch repo"
     return build_success "The Launch Repository is ready.", output
 
   catch error
@@ -679,25 +682,30 @@ destroy_cluster = async (params, creds) ->
 #===============================
 module.exports =
 
+  (console.log "in pandacluster, baby!")
+
   # This method creates and starts a CoreOS cluster.
   create: async (options) ->
+    console.log "create method called: ", options
     credentials = options.aws
     credentials.region = options.region || credentials.region
 
     try
+      console.log "trying to make amazon calls"
       # Make calls to Amazon's API. Gather data as we go.
       data = {}
-      #data.launch_stack = yield launch_stack( options, credentials)
-      #data.detect_formation = yield detect_formation( options, credentials)
+      data.launch_stack = yield launch_stack( options, credentials)
+      data.detect_formation = yield detect_formation( options, credentials)
 
       # Now that the cluster is fully formed, grab its IP address for later.
-      #options.ip_address = yield get_cluster_ip_address( options, credentials)
+      options.ip_address = yield get_cluster_ip_address( options, credentials)
 
       # Continue setting up the cluster.
-      #data.customize_cluster = yield customize_cluster( options, credentials)
+      data.customize_cluster = yield customize_cluster( options, credentials)
       data.test = yield prepare_launch_repository options
 
       console.log JSON.stringify data, null, '\t'
+      console.log "right before end"
       return build_success "The requested cluster is online, configured, and ready.",
         data, 201
 

@@ -47,7 +47,7 @@ request_data =
 
 server.post "/clusters", async (req, res, next) ->
   try
-    console.log "trying to post to cluster"
+    console.log "trying to post to cluster: ",  pandacluster
     result = yield pandacluster.create request_data
     res.send 201, result
   catch error

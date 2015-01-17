@@ -61,17 +61,17 @@ call ->
 #  console.log "fixtures : #{JSON.stringify(fixtures, undefined, 2)}"
 
 
-  try
-    res = yield pandacluster.destroy options
-    console.log res
-    {status, message, error, data} = res
-    assert.equal status, "in progress"
-    assert.equal message, "Cluster destruction in progress"
-    assert.equal error, null
-    assert.ok data.destroy_cluster.ResponseMetaData.RequestId
-
-  catch error
-    assert.fail error, null, "Destroy cluster failed"
+#  try
+#    res = yield pandacluster.destroy options
+#    console.log res
+#    {status, message, error, data} = res
+#    assert.equal status, "in progress"
+#    assert.equal message, "Cluster destruction in progress"
+#    assert.equal error, null
+#    assert.ok data.destroy_cluster.ResponseMetaData.RequestId
+#
+#  catch error
+#    assert.fail error, null, "Destroy cluster failed"
 
 
 
