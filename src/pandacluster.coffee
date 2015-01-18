@@ -328,6 +328,9 @@ get_formation_status = async (options, creds) ->
 # Cluster Customization
 #-------------------------
 
+#----------------------------
+# General DNS Fucntions
+#----------------------------
 # Return the public facing IP address of a single machine from the cluster we just
 # created.
 get_cluster_ip_address = async (options, creds) ->
@@ -408,7 +411,7 @@ get_hosted_zone_id = async (hostname, creds) ->
 
 
 # Get the IP address currently associated with the hostname.
-get_record_ip_address = async (hostname, zone_id, creds) ->
+get_dns_record = async (hostname, zone_id, creds) ->
   try
     AWS.config = set_aws_creds creds
     r53 = new AWS.Route53()
@@ -418,38 +421,40 @@ get_record_ip_address = async (hostname, zone_id, creds) ->
 
     # We need to conduct a little parsing to extract the IP address of the record set.
     record = where data.ResourceRecordSets, {Name:hostname}
-    return record[0].ResourceRecords[0].Value
+    if record.length == 0
+      return null
+    else
+      return {
+        current_ip_address: record[0].ResourceRecords[0].Value
+        current_type: record[0].Type
+      }
 
   catch error
     return build_error "Unable to access AWS Route 53.", error
 
 
 
-# Associate the cluster's IP address with a domain the user owns via Route 53.
-set_hostname = async (options, creds) ->
+# Access Route 53 and alter an existing Route 53 record to a new IP address.
+change_dns_record = async (options, creds) ->
   try
-    # Construct the "params" object that is used directly by the AWS method.
-    zone_id = yield get_hosted_zone_id( options.hostname, creds)
-    old_ip_address = yield get_record_ip_address( options.hostname, zone_id, creds)
-
     # The params object contains "Changes", an array of actions to take on the DNS
     # records.  Here we delete the old record and add the new IP address.
 
     # TODO: When we establish an Elastic Load Balancer solution, we
     # will need to the "AliasTarget" sub-object here.
     params =
-      HostedZoneId: zone_id
+      HostedZoneId: options.zone_id
       ChangeBatch:
         Changes: [
           {
             Action: "DELETE",
             ResourceRecordSet:
               Name: options.hostname,
-              Type: "A",
+              Type: options.current_type,
               TTL: 60,
               ResourceRecords: [
                 {
-                  Value: old_ip_address
+                  Value: options.current_ip_address
                 }
               ]
           }
@@ -457,7 +462,7 @@ set_hostname = async (options, creds) ->
             Action: "CREATE",
             ResourceRecordSet:
               Name: options.hostname,
-              Type: "A",
+              Type: options.type,
               TTL: 60,
               ResourceRecords: [
                 {
@@ -479,13 +484,52 @@ set_hostname = async (options, creds) ->
     }
 
   catch error
-    return build_error "Unable to assign the cluster's IP address to the designated hostname.", error
+    return build_error "Unable to assign the IP address to the designated hostname.", error
 
+
+add_dns_record = async (options, creds) ->
+  try
+    # The params object contains "Changes", an array of actions to take on the DNS
+    # records.  Here we delete the old record and add the new IP address.
+
+    # TODO: When we establish an Elastic Load Balancer solution, we
+    # will need to the "AliasTarget" sub-object here.
+    params =
+      HostedZoneId: options.zone_id
+      ChangeBatch:
+        Changes: [
+          {
+            Action: "CREATE",
+            ResourceRecordSet:
+              Name: options.hostname,
+              Type: options.type,
+              TTL: 60,
+              ResourceRecords: [
+                {
+                  Value: options.ip_address
+                }
+              ]
+          }
+        ]
+
+    # We are ready to access AWS.
+    AWS.config = set_aws_creds creds
+    r53 = new AWS.Route53()
+    change_record = lift_object r53, r53.changeResourceRecordSets
+
+    data = yield change_record params
+    return {
+      result: build_success "The domain \"#{options.hostname}\" has been created and assigned to #{options.ip_address}.", data
+      change_id: data.ChangeInfo.Id
+    }
+
+  catch error
+    return build_error "Unable to assign the IP address to the designated hostname.", error
 
 
 # This function checks the specified DNS record to see if its "INSYC", done updating.
 # It returns either true or false, and throws an exception if an AWS error is reported.
-get_hostname_status = async (change_id, creds) ->
+get_dns_change_status = async (change_id, creds) ->
   AWS.config = set_aws_creds creds
   r53 = new AWS.Route53()
   get_change = lift_object r53, r53.getChange
@@ -502,8 +546,45 @@ get_hostname_status = async (change_id, creds) ->
     return build_error "Unable to access AWS Route53.", err
 
 
+# Given a hostname for the cluster, add a new or alter an existing DNS record that routes
+# to the cluster's IP address.
+set_hostname = async (options, creds) ->
+  try
+    # We need to determine if the requested hostname is currently assigned in a DNS record.
+    zone_id = yield get_hosted_zone_id( options.hostname, creds)
+    {current_ip_address, current_type} = yield get_dns_record( options.hostname, zone_id, creds)
+
+    if current_ip_address?
+      # There is already a record.  Change it.
+      params =
+        hostname: options.hostname
+        zone_id: zone_id
+        current_ip_address: current_ip_address
+        current_type: current_type
+        type: "A"
+        ip_address: options.ip_address
+
+      return yield change_dns_record params, creds
+    else
+      # No existing record is associated with this hostname.  Create one.
+      params =
+        hostname: options.hostname
+        zone_id: zone_id
+        type: "A"
+        ip_address: options.ip_address
+
+      return yield add_dsn_record params, creds
+
+  catch error
+    return build_error "Unable to set the hostname to the cluster's IP address.", error
 
 
+
+
+
+#------------------------
+# Private DNS Functions
+#------------------------
 
 # Get the ID of the VPC we just created for the cluster.  In the CloudFormation
 # template, we specified a VPC that is tagged with the cluster's StackName.
@@ -575,6 +656,12 @@ get_private_dns_status = async (change_id, creds) ->
       return build_error "Unable to access AWS Route53.", err
 
 
+
+
+#---------------------------------
+# Launch Repository + Kick Server
+#--------------------------------
+
 # Prepare the cluster to be self-sufficient by installing directory called "launch".
 # "launch" acts as a repository where each service will have its own sub-directory
 # containing a Dockerfile, *.service file, and anything else it needs.
@@ -583,6 +670,7 @@ prepare_launch_directory = async (options) ->
     command =
       "ssh -o \"StrictHostKeyChecking no\" core@#{options.hostname} << EOF\n" +
       "mkdir launch\n" +
+      "mkdir launch/kick\n" +
       "EOF"
 
     output = yield execute command
@@ -596,43 +684,55 @@ prepare_launch_directory = async (options) ->
 # It's a primative, meta API server that allows the cluster to alter itself independently
 # of a remote actor.  The Kick server is Dockerized and contains the library of all Huxley mixins.
 prepare_kick = async (options, creds) ->
-
-
-
-
-
-# Helper function that launches a single unit from PandaCluster's library onto the cluster.
-launch_service_unit = async (name, hostname) ->
+  output = {}
   try
-    # Place a copy of the customized unit file on the cluster.
-    execute "scp #{__dirname}/services/#{name}  core@#{hostname}:/home/core/services/."
-
-    # Launch the service
+    # Place a copy of the kick-server Dockerfile on the cluster.
     command =
-      "ssh  core@#{hostname} << EOF\n" +
-      "fleetctl start launch/#{name}\n" +
-      "EOF"
+      "scp -o \"StrictHostKeyChecking no\" " +
+      "#{__dirname}/dockerfiles/kick-server/Dockerfile " +
+      "core@#{options.hostname}:/home/core/launch/kick/."
 
-    execute command
-
-  catch error
-    return build_error "Unable to launch service unit.", error
-
-
-# Place a hook-server on the cluster that will respond to users' git commands
-# and launch githook scripts.  The hook-server is loaded with all cluster public keys.
-launch_hook_server = async (options) ->
-  try
-    config = options.hook_server
-
-    # Customize the hook-server unit file template.
-    # Add public SSH keys.
-
-    # Launch
-    yield launch_service_unit "hook-server.service", config.hostname
+    output = yield execute command
+    return build_success "The Kick Server is online.", output
 
   catch error
-    return build_error "Unable to install hook-server into cluster.", error
+    return build_error "Unable to install the Launch Repository.", error
+
+
+
+
+# # Helper function that launches a single unit from PandaCluster's library onto the cluster.
+# launch_service_unit = async (name, hostname) ->
+#   try
+#     # Place a copy of the customized unit file on the cluster.
+#     execute "scp #{__dirname}/services/#{name}  core@#{hostname}:/home/core/services/."
+#
+#     # Launch the service
+#     command =
+#       "ssh  core@#{hostname} << EOF\n" +
+#       "fleetctl start launch/#{name}\n" +
+#       "EOF"
+#
+#     execute command
+#
+#   catch error
+#     return build_error "Unable to launch service unit.", error
+#
+#
+# # Place a hook-server on the cluster that will respond to users' git commands
+# # and launch githook scripts.  The hook-server is loaded with all cluster public keys.
+# launch_hook_server = async (options) ->
+#   try
+#     config = options.hook_server
+#
+#     # Customize the hook-server unit file template.
+#     # Add public SSH keys.
+#
+#     # Launch
+#     yield launch_service_unit "hook-server.service", config.hostname
+#
+#   catch error
+#     return build_error "Unable to install hook-server into cluster.", error
 
 
 # After cluster formation is complete, launch a variety of services
@@ -646,7 +746,7 @@ customize_cluster = async (options, creds) ->
     if options.hostname?
       {result, change_id} = yield set_hostname options, creds
       data.set_hostname = result
-      data.detect_hostname = yield poll_until_true get_hostname_status, change_id,
+      data.detect_hostname = yield poll_until_true get_dns_change_status, change_id,
        creds, 5000, "Unable to detect DNS record change."
     else
       data.set_hostname = build_success "No hostname specified, using cluster IP Address.", options.ip_address
@@ -655,12 +755,12 @@ customize_cluster = async (options, creds) ->
     # Establish a private DNS service available only on the cluster.
     {result, change_id} = yield launch_private_dns options, creds
     data.launch_private_dns = result
-    data.detect_private_dns_formation = yield poll_until_true get_hostname_status,
+    data.detect_private_dns_formation = yield poll_until_true get_dns_change_status,
       change_id, creds, 5000, "Unable to detect Private DNS formation."
 
+    # Establish the Launch Repository and Bootstrap the Kick Server
     data.prepare_launch_directory = yield prepare_launch_directory options
-    #data.prepare_kick = yield prepare_kick options creds
-    #data.launch_hook_server = yield launch_hook_server options
+    data.prepare_kick = yield prepare_kick options, creds
 
     return build_success "Cluster customizations are complete.", data
 
@@ -710,7 +810,7 @@ module.exports =
       # Continue setting up the cluster.
       data.customize_cluster = yield customize_cluster( options, credentials)
 
-      console.log JSON.stringify data, null, '\t'
+      console.log  JSON.stringify data, null, '\t'
       return build_success "The requested cluster is online, configured, and ready.",
         data
 
