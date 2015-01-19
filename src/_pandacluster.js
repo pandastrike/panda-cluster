@@ -509,6 +509,7 @@
 
   module.exports = {
     create: async(function*(options) {
+      console.log("this is the pandacluster.js file")
       var credentials, data;
       credentials = options.aws;
       credentials.region = options.region || credentials.region;
