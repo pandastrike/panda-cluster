@@ -94,9 +94,9 @@ parse_cli = (command, argv) ->
 
 # We must finalize the array "options.formation_units".  This
 # variable is an array of objects detailing which services are launched during
-# cluster formation.  The list of all available units is in "src/services/formation-units.cson"
+# cluster formation.  The list of all available units is in "src/formation-services/formation-units.cson"
 gather_formation_units = (options) ->
-  unit_hash = parse( read( resolve(__dirname, "services/formation-units.cson")))
+  unit_hash = parse( read( resolve(__dirname, "formation-services/formation-units.cson")))
 
   # Build array.
   units = []

@@ -1,0 +1,43 @@
+#===============================================================================
+# PandaCluster - Kick-Server
+#===============================================================================
+# This unit is part of the PandaHook project. It spins up a kick-server. This is
+# a primative meta API that gives the cluster some autonomy.  At the moment, it
+# allows other services to announce themselves to the cluster's DNS via a curl command.
+
+
+[Unit]
+Description=Spin Up Kick-Server
+After=docker.service
+
+[Service]
+TimeoutStartSec=0
+
+ExecStartPre=/usr/bin/echo "========================"
+ExecStartPre=/usr/bin/echo "  New Service Starting"
+ExecStartPre=/usr/bin/echo "========================"
+
+# Display this service's IP addresses.
+EnvironmentFile=/etc/environment
+ExecStartPre=/usr/bin/echo "Public IP Address: ${COREOS_PUBLIC_IPV4}"
+ExecStartPre=/usr/bin/echo "Private IP Address: ${COREOS_PRIVATE_IPV4}"
+
+
+# Build The Kick-Server's Docker Container.
+ExecStartPre=-/usr/bin/docker kill kick
+ExecStartPre=-/usr/bin/docker kick
+ExecStartPre=/usr/bin/docker build --tag="kick_image" /home/core/launch/kick/.
+
+
+# Deploy.  We also pass in the user's AWS keys here.
+ExecStart=/usr/bin/docker run --name kick -p 2000:80 \
+  kick_image /bin/bash -c \
+  "echo 'id: "{{creds.id}}"' > panda-cluster-kick/kick.cson && \
+  echo 'key: "#{{creds.key}}"' >> panda-cluster-kick/kick.cson && \
+  echo 'region: "{{creds.region}}"' >> panda-cluster-kick/kick.cson && \
+  source ~/.nvm/nvm.sh && nvm use 0.11 && \
+  coffee --nodejs --harmony /panda-cluster-kick/kick.coffee" 
+
+
+[Install]
+WantedBy=multi-user.target

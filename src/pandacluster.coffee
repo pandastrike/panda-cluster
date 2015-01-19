@@ -145,7 +145,7 @@ add_unit = (cloud_config, unit) ->
   # For "content", we draw from a unit-file maintained in a separate file. Add
   # eight spaces to the begining of each line (4 indentations) and follow each
   # line with an explicit new-line character.
-  content = read( resolve( __dirname, "services/#{unit.name}"))
+  content = read( resolve( __dirname, "formation-services/#{unit.name}"))
   content = content.split "\n"
 
   while content.length > 0
@@ -183,8 +183,25 @@ build_template = async (options, creds) ->
           }
         ]
 
-    # Place this object back into the JSON object.
+
+    # Expose addtional ports to machines within the cluster.  By default, only
+    # port 22 is exposed to the public Internet.  4001 and 7001 are exposed to CoreOS's
+    # (as in the company) servers to make etcd and inter-machine commication work properly.
+    resources["InternalSecurityGroup"] =
+      Type: "AWS::EC2::SecurityGroup"
+      Properties:
+        GroupDescription: "Exposes a set of ports to other machines in the cluster ONLY."
+        VpcId: {Ref: "VPC"}
+        SecurityGroupIngress: [{
+          IpProtocol: "tcp"
+          FromPort: "2000"
+          ToPort: "2999"
+          CidrIp: "10.0.0.0/8"  # These are all of the VPC's internal IP addresses.
+        }]
+
+    # Place "Resources" back into the JSON template object.
     template_object.Resources = resources
+
 
 
     #----------------------------
@@ -356,7 +373,10 @@ get_cluster_ip_address = async (options, creds) ->
 
     try
       data = yield describe_instances params
-      return data.Reservations[0].Instances[0].PublicIpAddress
+      return {
+        ip_address: data.Reservations[0].Instances[0].PublicIpAddress
+        private_ip_address: data.Reservations[0].Instances[0].PrivateIpAddress
+      }
 
     catch error
       return build_error "Unable to access AWS EC2.", error
@@ -631,6 +651,7 @@ launch_private_dns = async (options, creds) ->
     return {
       result: build_success "The Cluster's private DNS has been established.", data
       change_id: data.ChangeInfo.Id
+      zone_id: data.HostedZone.Id
     }
 
   catch error
@@ -682,20 +703,55 @@ prepare_launch_directory = async (options) ->
 
 # Prepare the cluster to be self-sufficient by installing the Kick API server. (short for sidekick).
 # It's a primative, meta API server that allows the cluster to alter itself independently
-# of a remote actor.  The Kick server is Dockerized and contains the library of all Huxley mixins.
+# of a remote agent.  The Kick server is Dockerized and contains the library of all Huxley mixins.
 prepare_kick = async (options, creds) ->
   output = {}
   try
     # Place a copy of the kick-server Dockerfile on the cluster.
     command =
       "scp -o \"StrictHostKeyChecking no\" " +
-      "#{__dirname}/dockerfiles/kick-server/Dockerfile " +
+      "#{__dirname}/launch/kick/Dockerfile " +
       "core@#{options.hostname}:/home/core/launch/kick/."
 
-    output = yield execute command
+    output.dockerfile = yield execute command
+
+    # Add the kick server to the cluster's private DNS records.
+    params =
+      hostname: "kick.#{options.dns}"
+      zone_id: options.dns_zone_id
+      type: "A"
+      ip_address: options.private_ip_address
+
+    {result, change_id} = yield add_dns_record params, creds
+    output.register_kick = result
+    output.detect_registration = yield poll_until_true get_dns_change_status,
+      change_id, creds, 5000, "Unable to detect Kick registration."
+
+    # Build the Kick's Docker container from its Dockerfile.
+    command =
+      "ssh -o \"StrictHostKeyChecking no\" core@#{options.hostname} << EOF\n" +
+      "cd launch/kick\n" +
+      "docker build --tag=\"kick_image\" .\n" +
+      "EOF"
+
+    output.build_kick = yield execute command
+
+    # Activate the kick-server and pass in the user's AWS credentials.
+    command =
+      "ssh -o \"StrictHostKeyChecking no\" core@#{options.hostname} << EOF\n" +
+      "docker run -d -p 2000:80 --name kick kick_image /bin/bash -c " +
+      "\"echo \'id: \"#{creds.id}\"\' > panda-cluster-kick/kick.cson && " +
+      "echo \'key: \"#{creds.key}\"\' >> panda-cluster-kick/kick.cson && " +
+      "echo \'region: \"#{creds.region}\"\' >> panda-cluster-kick/kick.cson &&" +
+      "source ~/.nvm/nvm.sh && nvm use 0.11 && " +
+      "coffee --nodejs --harmony /panda-cluster-kick/kick.coffee\" \n" +
+      "EOF"
+    console.log command
+    output.run_kick = yield execute command
     return build_success "The Kick Server is online.", output
 
   catch error
+    console.log error
     return build_error "Unable to install the Launch Repository.", error
 
 
@@ -738,10 +794,9 @@ prepare_kick = async (options, creds) ->
 # After cluster formation is complete, launch a variety of services
 # into the cluster from a library of established unit-files and AWS commands.
 customize_cluster = async (options, creds) ->
+  # Gather success data as we go.
+  data = {}
   try
-    # Gather success data as we go.
-    data = {}
-
     # Set the specified hostname to the cluster's IP address.
     if options.hostname?
       {result, change_id} = yield set_hostname options, creds
@@ -753,7 +808,8 @@ customize_cluster = async (options, creds) ->
       options.hostname = options.ip_address
 
     # Establish a private DNS service available only on the cluster.
-    {result, change_id} = yield launch_private_dns options, creds
+    {result, change_id, zone_id} = yield launch_private_dns options, creds
+    options.dns_zone_id = zone_id
     data.launch_private_dns = result
     data.detect_private_dns_formation = yield poll_until_true get_dns_change_status,
       change_id, creds, 5000, "Unable to detect Private DNS formation."
@@ -805,7 +861,9 @@ module.exports =
        credentials, 5000, "Unable to detect cluster formation."
 
       # Now that the cluster is fully formed, grab its IP address for later.
-      options.ip_address = yield get_cluster_ip_address( options, credentials)
+      {ip_address, private_ip_address} = yield get_cluster_ip_address( options, credentials)
+      options.ip_address = ip_address
+      options.private_ip_address = private_ip_address
 
       # Continue setting up the cluster.
       data.customize_cluster = yield customize_cluster( options, credentials)
