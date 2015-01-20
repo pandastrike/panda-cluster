@@ -178,26 +178,119 @@ build_template = async (options, creds) ->
         EnableDnsHostnames: true
         Tags: [
           {
-            Key: "VPC-Name"
+            Key: "Name"
             Value: options.stack_name
           }
         ]
 
 
-    # Expose addtional ports to machines within the cluster.  By default, only
-    # port 22 is exposed to the public Internet.  4001 and 7001 are exposed to CoreOS's
-    # (as in the company) servers to make etcd and inter-machine commication work properly.
-    resources["InternalSecurityGroup"] =
+    # Add an object specifying a subnet.
+    resources["ClusterSubnet"] =
+      Type: "AWS::EC2::Subnet"
+      Properties:
+        AvailabilityZone: "us-west-1c"
+        VpcId: { Ref: "VPC" }
+        CidrBlock : "10.0.0.0/16"
+
+
+    # Add an object specifying an Internet Gateway.
+    resources["ClusterGateway"] =
+      Type: "AWS::EC2::InternetGateway"
+      Properties:
+        Tags: [
+          {
+            Key: "Name"
+            Value: options.stack_name
+          }]
+
+    # Add an object specifying the attachment of this Internet Gateway.
+    resources["AttachClusterGateway"] =
+      Type: "AWS::EC2::VPCGatewayAttachment"
+      Properties:
+        InternetGatewayId: {Ref: "ClusterGateway"}
+        VpcId: {Ref: "VPC"}
+
+    # Add an object specifying the creation of a new Route Table.
+    resources["ClusterRouteTable"] =
+      Type: "AWS::EC2::RouteTable"
+      Properties:
+        VpcId: {Ref: "VPC"}
+        Tags: [
+          {
+            Key: "Name"
+            Value: options.stack_name
+          }]
+
+    # Add an object speicfying a Route for public addresses (through the Internet Gateway).
+    resources["PublicRoute"] =
+      Type: "AWS::EC2::Route"
+      DependsOn: "ClusterGateway"
+      Properties:
+        DestinationCidrBlock: "0.0.0.0/0"
+        GatewayId: {Ref: "ClusterGateway"}
+        RouteTableId: {Ref: "ClusterRouteTable"}
+
+    # Add an object associating the new Route Table with our VPC.
+    resources["AttachRouteTable"] =
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties:
+        RouteTableId: {Ref: "ClusterRouteTable"}
+        SubnetId: {Ref: "ClusterSubnet"}
+
+
+    # Replace the objects specifying the SecurityGroups.
+    # Start by deleting the current configuration.  We need start over to accomodate the VPC.
+    delete resources.CoreOSSecurityGroup
+    delete resources.Ingress4001
+    delete resources.Ingress7001
+
+    # Expose the following ports:
+    # - port 22 is exposed to the public Internet for SSH.
+    # - 4001 and 7001 are also exposed publicly to make etcd and inter-machine communication work properly.
+    # - 2000-3000 are addtional ports exposed only to machines within the cluster.
+    # TODO: Lock 4001 and 7001 down so only CoreOS can access.
+    resources["ClusterSecurityGroup"] =
       Type: "AWS::EC2::SecurityGroup"
       Properties:
-        GroupDescription: "Exposes a set of ports to other machines in the cluster ONLY."
+        GroupDescription: "PandaCluster SecurityGroup"
         VpcId: {Ref: "VPC"}
-        SecurityGroupIngress: [{
-          IpProtocol: "tcp"
-          FromPort: "2000"
-          ToPort: "2999"
-          CidrIp: "10.0.0.0/8"  # These are all of the VPC's internal IP addresses.
-        }]
+        SecurityGroupIngress: [
+          {
+            IpProtocol: "tcp"
+            FromPort: "22"
+            ToPort: "22"
+            CidrIp: "0.0.0.0/0"
+          }
+          {
+            IpProtocol: "tcp"
+            FromPort: "2000"
+            ToPort: "3000"
+            CidrIp: "10.0.0.0/8"
+          }
+          {
+            IpProtocol: "tcp"
+            FromPort: "4001"
+            ToPort: "4001"
+            CidrIp: "0.0.0.0/0"
+          }
+          {
+            IpProtocol: "tcp"
+            FromPort: "7001"
+            ToPort: "7001"
+            CidrIp: "0.0.0.0/0"
+          }
+        ]
+
+
+    # Modify the object specifying the cluster's LaunchConfig.  Associate with our new SecurityGroup.
+    resources.CoreOSServerLaunchConfig["DependsOn"] = "ClusterGateway"
+    resources.CoreOSServerLaunchConfig.Properties.SecurityGroups = [ {Ref: "ClusterSecurityGroup"} ]
+    resources.CoreOSServerLaunchConfig.Properties.AssociatePublicIpAddress = "true"
+
+    # Modify the object specifying the cluster's auto-scaling group.  Associate with the VPC.
+    resources.CoreOSServerAutoScale["DependsOn"] = "ClusterGateway"
+    resources.CoreOSServerAutoScale.Properties["VPCZoneIdentifier"] = [{Ref: "ClusterSubnet"}]
+    resources.CoreOSServerAutoScale.Properties.AvailabilityZones = ["us-west-1c"]
 
     # Place "Resources" back into the JSON template object.
     template_object.Resources = resources
@@ -272,7 +365,7 @@ launch_stack = async (options, creds) ->
     params.StackName = options.stack_name
     params.OnFailure = "DELETE"
     params.TemplateBody = yield build_template options, creds
-
+    console.log params.TemplateBody
     #---------------------------------------------------------------------------
     # Parameters is a map of key/values custom defined for this stack by the
     # template file.  We will now fill out the map as specified or with defaults.
@@ -311,8 +404,9 @@ launch_stack = async (options, creds) ->
     data = yield create_stack params
     return build_success "Cluster formation in progress.", data
 
-  catch err
-    return build_error "Unable to access AWS CloudFormation", err
+  catch error
+    console.log error
+    return build_error "Unable to access AWS CloudFormation", error
 
 
 # This function checks the specified AWS stack to see if its formation is complete.
@@ -615,7 +709,7 @@ get_cluster_vpc_id = async (options, creds) ->
 
   params =
     Filters: [
-      Name: "tag:VPC-Name"
+      Name: "tag:Name"
       Values: [
         options.stack_name
       ]
@@ -743,6 +837,7 @@ prepare_kick = async (options, creds) ->
       "\"echo \'id: \"#{creds.id}\"\' > panda-cluster-kick/kick.cson && " +
       "echo \'key: \"#{creds.key}\"\' >> panda-cluster-kick/kick.cson && " +
       "echo \'region: \"#{creds.region}\"\' >> panda-cluster-kick/kick.cson &&" +
+      "echo \'zone_id: \"#{options.dns_zone_id}\"\' >> panda-cluster-kick/kick.cson &&" +
       "source ~/.nvm/nvm.sh && nvm use 0.11 && " +
       "coffee --nodejs --harmony /panda-cluster-kick/kick.coffee\" \n" +
       "EOF"
