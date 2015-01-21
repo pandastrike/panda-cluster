@@ -365,7 +365,7 @@ launch_stack = async (options, creds) ->
     params.StackName = options.stack_name
     params.OnFailure = "DELETE"
     params.TemplateBody = yield build_template options, creds
-    console.log params.TemplateBody
+
     #---------------------------------------------------------------------------
     # Parameters is a map of key/values custom defined for this stack by the
     # template file.  We will now fill out the map as specified or with defaults.
@@ -535,13 +535,16 @@ get_dns_record = async (hostname, zone_id, creds) ->
 
     # We need to conduct a little parsing to extract the IP address of the record set.
     record = where data.ResourceRecordSets, {Name:hostname}
+
     if record.length == 0
-      return null
-    else
-      return {
-        current_ip_address: record[0].ResourceRecords[0].Value
-        current_type: record[0].Type
-      }
+      record = where data.ResourceRecordSets, {Name: "#{hostname}."}
+      if record.length == 0
+        return null
+
+    return {
+      current_ip_address: record[0].ResourceRecords[0].Value
+      current_type: record[0].Type
+    }
 
   catch error
     return build_error "Unable to access AWS Route 53.", error
@@ -831,13 +834,25 @@ prepare_kick = async (options, creds) ->
     output.build_kick = yield execute command
 
     # Activate the kick-server and pass in the user's AWS credentials.
+    options.dns_zone_id = options.dns_zone_id.split("/")[2]
+
     command =
       "ssh -o \"StrictHostKeyChecking no\" core@#{options.hostname} << EOF\n" +
       "docker run -d -p 2000:80 --name kick kick_image /bin/bash -c " +
-      "\"echo \'id: \"#{creds.id}\"\' > panda-cluster-kick/kick.cson && " +
-      "echo \'key: \"#{creds.key}\"\' >> panda-cluster-kick/kick.cson && " +
-      "echo \'region: \"#{creds.region}\"\' >> panda-cluster-kick/kick.cson &&" +
-      "echo \'zone_id: \"#{options.dns_zone_id}\"\' >> panda-cluster-kick/kick.cson &&" +
+      "\"cd panda-cluster-kick && " +
+
+      "sed \"s/id_goes_here/#{creds.id}/g\" < kick.cson > temp && " +
+      "mv temp kick.cson && " +
+
+      "sed \"s/key_goes_here/#{creds.key}/g\" < kick.cson > temp && " +
+      "mv temp kick.cson && " +
+
+      "sed \"s/region_goes_here/#{creds.region}/g\" < kick.cson > temp && " +
+      "mv temp kick.cson && " +
+
+      "sed \"s/zone_goes_here/#{options.dns_zone_id}/g\" < kick.cson > temp && " +
+      "mv temp kick.cson && " +
+
       "source ~/.nvm/nvm.sh && nvm use 0.11 && " +
       "coffee --nodejs --harmony /panda-cluster-kick/kick.coffee\" \n" +
       "EOF"
