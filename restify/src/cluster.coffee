@@ -33,13 +33,43 @@ get_request_data = ({aws, cluster_name}) ->
   aws: aws.aws
 
 
-module.exports =
+module.exports = class Cluster
 
-  destroy_cluster: async ({cluster_name}) ->
-    request_data = get_request_data aws: aws, cluster_name: cluster_name
+  constructor: ({datastore}) ->
+    @mongo = datastore
+
+  destroy_cluster: async ({req}) ->
+    request_data = @mongo.destroy_cluster req
     yield pandacluster.destroy request_data
 
-  create_cluster: async ({cluster_name}) ->
-    console.log "aws: ", aws
-    request_data = get_request_data aws: aws, cluster_name: cluster_name
+  create_cluster: async ({req}) ->
+    user = @mongo.create_cluster req
+    console.log "*****create request data: ", user
+    {cluster_name} = cson.parse req.body
+    request_data =
+      public_keys: user.public_keys
+      key_pair: "peter"
+      aws: user.aws
+      stack_name: cluster_name
     yield pandacluster.create request_data
+
+#  create_cluster: async ({req}) ->
+#    {params} = req
+#    {body} = params
+#    console.log params
+#    yield @mongo.usersate body
+#    request_data = get_request_data aws: aws, cluster_name: cluster_name
+#    yield pandacluster.create request_data
+
+  # FIXME: async
+  # FIXME: move to separate file "user.coffee"
+  create_user: ({req}) ->
+    new_user = @mongo.create_user req
+    console.log "*****this new user: ", new_user
+    new_user
+
+  get_all_users: ->
+    @mongo.get_all_users()
+
+
+
