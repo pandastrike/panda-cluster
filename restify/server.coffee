@@ -43,24 +43,26 @@ server.post "/clusters", async (req, res, next) ->
     res.send 201, result
   catch error
     res.send 400, error
+  console.log "*****API end create cluster"
   next()
 
-server.post "/cluster/:cluster_id", async (req, res, next) ->
+server.post "/cluster/:cluster_url", async (req, res, next) ->
   try
     result = yield cluster.destroy_cluster {req: req}
     res.send 201, result
   catch error
     res.send 400, error
+  console.log "*****API end delete cluster"
   next()
 
 # FIXME: async
 server.post "/users", (req, res, next) ->
-  console.log req.body
   try
     result = cluster.create_user {req: req}
     res.send 201, result
   catch error
     res.send 400, error
+  console.log "*****API end create user"
   next()
 
 

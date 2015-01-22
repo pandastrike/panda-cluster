@@ -180,10 +180,11 @@ build_template = async (options) ->
 
     # Creates .service and .mount files from templates, even if files not used.
     # Defaults to creating a service file with drive /dev/xvdb.
-    prepare_ephemeral_drive_template options.ephemeral_drive
-    prepare_docker_mount_template options.ephemeral_drive
+    #prepare_ephemeral_drive_template options.ephemeral_drive
+    #prepare_docker_mount_template options.ephemeral_drive
 
-    unless options.formation_units == []
+    
+    unless !options.formation_units || options.formation_units == []
       for x in options.formation_units
         cloud_config = add_unit cloud_config, x
 
@@ -243,6 +244,8 @@ launch_stack = async (options, creds) ->
     params.StackName = options.stack_name
     params.OnFailure = "DELETE"
     params.TemplateBody = yield build_template options
+    #params.TemplateBody = JSON.stringify params.TemplateBody
+    console.log params.TemplateBody
 
     #---------------------------------------------------------------------------
     # Parameters is a map of key/values custom defined for this stack by the
@@ -630,6 +633,7 @@ module.exports =
 
   # This method stops and destroys a CoreOS cluster.
   destroy: async (options) ->
+    console.log "*****pandacluster destroy: ", options
     credentials = options.aws
     credentials.region = options.region || credentials.region
 

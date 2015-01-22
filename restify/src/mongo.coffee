@@ -14,6 +14,15 @@ user = ({email, aws, public_keys, secret_token}) ->
   aws: aws
   public_keys: public_keys
 
+###
+  clusters:
+    email: String
+    {
+      url: String
+      cluster_name: String
+    }
+###
+
 cluster = ({url, cluster_name}) ->
   url: url
   cluster_name: cluster_name
@@ -53,7 +62,9 @@ module.exports = class Mongo
     user = @users[email]
     if user
       if is_valid_token secret_token, user
-        cluster_url = make_key()
+        # FIXME: add in cluster url after testing
+        #cluster_url = make_key()
+        cluster_url = "123"
         new_cluster = cluster
           url: cluster_url
           cluster_name: cluster_name
@@ -64,6 +75,28 @@ module.exports = class Mongo
     else
       throw new Error "No user matching #{email}"
     #yield @users.put (user {email: email, secret_token: make_key()})
+
+  # FIXME: make async
+  destroy_cluster: ({body, params}) ->
+    {cluster_url} = params
+    {email, secret_token} = cson.parse body
+    user = @users[email]
+    request_data =
+      user: user
+      cluster_name: null
+    if user
+      #if is_valid_token secret_token, user
+      if true
+        for cluster_name, cluster of user.clusters
+          if cluster.cluster_url == cluster_url
+            request_data.cluster_name = cluster_name
+            console.log "*****request_data should have cluster_name: ", request_data
+            delete @users[email].clusters[cluster_name]
+        return request_data
+      else
+        throw new Error "Invalid email or secret token"
+    else
+      throw new Error "No user matching #{email}"
 
 #  user:
 #
