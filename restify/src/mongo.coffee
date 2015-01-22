@@ -44,15 +44,21 @@ module.exports = class Mongo
   # FIXME: make async
   # create a user
   create_user: ({body}) ->
+    console.log "*****create user body: ", body
     {email, aws, public_keys} = cson.parse body
+    console.log "1.7"
     secret_token = make_key()
-    new_user = user
+    console.log "1.8"
+    new_user = user({
       email: email
       secret_token: secret_token
       email: email
       aws: aws
       public_keys: public_keys
+    })
+    console.log "1.9"
     @users[email] = new_user
+    console.log "2"
     new_user
     #yield @users.put (user {email: email, secret_token: make_key()})
 
@@ -61,7 +67,8 @@ module.exports = class Mongo
     {email, cluster_name, secret_token} = cson.parse body
     user = @users[email]
     if user
-      if is_valid_token secret_token, user
+      #if is_valid_token secret_token, user
+      if true
         # FIXME: add in cluster url after testing
         #cluster_url = make_key()
         cluster_url = "123"
@@ -87,8 +94,12 @@ module.exports = class Mongo
     if user
       #if is_valid_token secret_token, user
       if true
+        console.log "*****destroy cluster: is true"
         for cluster_name, cluster of user.clusters
-          if cluster.cluster_url == cluster_url
+          console.log "*****cluster_name: ", cluster_name
+          console.log "*****cluster: ", cluster
+          console.log "*****cluster_url: ", cluster_url
+          if cluster.url == cluster_url
             request_data.cluster_name = cluster_name
             console.log "*****request_data should have cluster_name: ", request_data
             delete @users[email].clusters[cluster_name]

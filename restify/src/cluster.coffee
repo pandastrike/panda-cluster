@@ -17,6 +17,7 @@ module.exports = class Cluster
     request_data =
       aws: user.aws
       stack_name: cluster_name
+    console.log "*****this is the request data: ", request_data
     yield pandacluster.destroy request_data
 
   # FIXME: must receive creation confirmation from AWS before adding to database
@@ -35,7 +36,9 @@ module.exports = class Cluster
   # FIXME: async
   # FIXME: move to separate file "user.coffee"
   create_user: ({req}) ->
+    console.log "1"
     new_user = @mongo.create_user req
+    console.log "3"
     new_user
 
   get_all_users: ->
