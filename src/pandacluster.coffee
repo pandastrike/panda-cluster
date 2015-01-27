@@ -605,6 +605,7 @@ module.exports =
 
   # This method creates and starts a CoreOS cluster.
   create: async (options) ->
+    console.log "*****creat options: ", options
     credentials = options.aws
     credentials.region = options.region || credentials.region
 
