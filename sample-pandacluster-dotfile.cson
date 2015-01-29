@@ -9,3 +9,87 @@ public_keys: [
   "that are comma separated.",
   "One line per key."
 ]
+
+#=============================
+# Cluster Description
+#=============================
+stack_name: "MyCluster"   # Required
+key_pair: "MyKey"         # Required
+channel: "alpha"
+
+hostname: "hook.SomeDomainIOwn.com"  # Public hostname for leader machine of cluster.
+dns: "myapp.ArbitraryDomain"         # This domain is only seen privately, so it can be whatever you want.
+
+# **WARNING** - These affect the cost of your cluster.  See AWS Documentation for pricing.
+instance_type: "m1.medium"
+cluster_size: "3"
+spot_price: "0.009"   # Spot Instances can dramatically lower your costs.
+#=============================
+
+# Optional Tag Descriptions
+tags: [
+  {
+    Key: "Name"
+    Value: "MyApp"
+  }
+  {
+    Key: "customer"
+    Value: "FooEnterprises"
+  }
+  {
+    Key: "environment"
+    Value: "production"
+  }
+  {
+    Key: "project"
+    Value: "Awesome"
+  }
+  {
+    Key: "role"
+    Value: "CoreOS"
+  }
+]
+
+
+#=============================
+# Template Descriptions
+#=============================
+# Template configurations of services that are needed *during* cluster formation.  These are limited
+# to services that change properties of the instances themselves.
+formation_service_templates:
+  format_ephemeral: "default"
+  var_lib_docker: "default"
+
+# Template configuartions of services that can be deployed after the isntances are online.  These
+# services are deployed before PandaCluster declares your cluster ready for access.
+service_templates:
+  hook_server:
+    output_filename: "hook-server.service"
+    container_name: "hook"
+    image_name: "hook_image"
+    hostname: "hook.myapp.cluster"
+    ip_address: "${COREOS_PUBLIC_IPV4}"
+    port: "3000"
+    weight: "1"
+    priority: "1"
+
+  elasticsearch:
+    output_filename: "elasticsearch.service"
+    container_name: "elasticsearch"
+    image_name: "elasticsearch_image"
+    hostname: "elasticsearch.myapp.cluster"
+    ip_address: "${COREOS_PUBLIC_IPV4}"
+    port: "2001"
+    weight: "1"
+    priority: "1"
+
+  kibana:
+    output_filename: "kibana.service"
+    after: "elasticsearch.service"
+    container_name: "kibana"
+    image_name: "kibana_image"
+    hostname: "kibana.myapp.cluster"
+    ip_address: "${COREOS_PUBLIC_IPV4}"
+    port: "3001"
+    weight: "1"
+    priority: "1"

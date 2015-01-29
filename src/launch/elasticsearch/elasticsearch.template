@@ -1,12 +1,10 @@
 #===============================================================================
-# PandaCluster - Hook-Server
+# PandaCluster - Elasticsearch 1.4.2
 #===============================================================================
-# This unit spins up a hook-server. A hook-server triggers githooks, arbitrary
-# scripts launched by git commands.
-
+# This unit spins up Elasticsearch.
 
 [Unit]
-Description=Spin Up Hook-Server
+Description=Spin Up Elasticsearch
 After={{{after}}}
 
 [Service]
@@ -22,10 +20,10 @@ ExecStartPre=/usr/bin/echo "Public IP Address: ${COREOS_PUBLIC_IPV4}"
 ExecStartPre=/usr/bin/echo "Private IP Address: ${COREOS_PRIVATE_IPV4}"
 
 
-# Pull The Hook-Server Docker Container.
+# Pull The Elasticsearch Docker Container.
 ExecStartPre=-/usr/bin/docker kill {{{container_name}}}
 ExecStartPre=-/usr/bin/docker rm {{{container_name}}}
-ExecStartPre=cd launch/hook-server && /usr/bin/docker build --tag="{{{image_name}}}" .
+ExecStartPre=cd launch/elasticsearch && /usr/bin/docker build --tag="{{{image_name}}}" .
 
 # Register this service with DNS.
 ExecStartPre=/usr/bin/curl -XPOST {{{kick_address}}} -d '\
@@ -35,12 +33,9 @@ ExecStartPre=/usr/bin/curl -XPOST {{{kick_address}}} -d '\
   "weight": "{{{weight}}}"          \
   "priority": "{{{priority}}}"'
 
-ExecStart=/usr/bin/docker run --name {{{container_name}}} -p {{{port}}}:22 \
+ExecStart=/usr/bin/docker run --name {{{container_name}}} -p {{{port}}}:9200 \
   {{{image_name}}} /bin/bash -c \
-  '{{#public_keys}}
-    echo "{{.}}" >> ~/.ssh/authorized_keys &&
-  {{/public_keys}}
-  coffee dummy.coffee'
+  'cd elasticsearch-1.4.2/bin && ./elasticsearch'
 
 
 [Install]

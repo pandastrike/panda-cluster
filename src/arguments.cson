@@ -25,7 +25,6 @@ create:[
   {
     name: "key_pair"
     flag: "-k"
-    required: true
   }
   {
     name: "mount_docker"
@@ -35,7 +34,6 @@ create:[
   {
     name: "stack_name"
     flag: "-n"
-    required: true
   }
   {
     name: "region"

@@ -7,10 +7,7 @@ MAINTAINER David Harper (david@pandastrike.com)
 # the CoreOS stack.  Hook-servers contain "bare" git repositories with one or
 # more githooks, scripts you trigger with git commands.
 
-# Hook-Server & CoreOS Requirements
-# - git
-# - fleetctl
-
+# Hook-Server & CoreOS Requirements: (1) git, (2) fleetctl
 # Install requirements, a couple dependencies, and some tools that make life easier.
 RUN pacman -Syu --noconfirm
 RUN pacman-db-upgrade
@@ -37,3 +34,13 @@ RUN mkdir .ssh  && \
 RUN echo "Host *" >> .ssh/config  && \
   echo "  ForwardAgent yes "  >> .ssh/config  && \
   echo "StrictHostKeyChecking no" >> .ssh/config
+
+# Add a dummy Node server that keeps the Docker container running.  In truth, we
+# will rely on SSH and git to handle authorization, detection, and execution.
+# However, packaging this in a container allows us to provide dependencies that
+# would otherwise be difficult with the bare CoreOS.
+RUN pacman -S --noconfirm nodejs
+RUN npm install -g coffee-script
+RUN echo "http = require 'http'" >> dummy.coffee && \
+    echo "http.createServer().listen(80)" >> dummy.coffee && \
+    echo "console.log 'Dummy is online.'" >> dummy.coffee

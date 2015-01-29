@@ -9,9 +9,11 @@ https = require "https"
 {resolve} = require "path"
 
 # In-House Libraries
-{read, write} = require "fairmont"        # Easy file read/write
 {parse} = require "c50n"                  # .cson file parsing
+{dashed} = require "fairmont"
+{writeFileSync} = require "fs"
 
+# Awsome functional style tricks.
 {where} = require "underscore"
 
 # When Library
@@ -23,6 +25,9 @@ async = (require "when/generator").lift
 # ShellJS
 {exec, error} = require "shelljs"
 
+# Included modules from PandaCluster
+{render_template} = require "./templatize"
+
 # Access AWS API
 AWS = require "aws-sdk"
 
@@ -30,6 +35,22 @@ AWS = require "aws-sdk"
 #================================
 # Helper Functions
 #================================
+# Lift Node's async read/write functions.
+{read_file, write_file} = do ->
+  {readFile, writeFile} = liftAll(require "fs")
+
+  read_file: async (path) ->
+    (yield readFile path, "utf-8").toString()
+
+  write_file: (path, content) ->
+    writeFile path, content, "utf-8"
+
+# Render underscores and dashes as whitespace.
+plain_text = (string) ->
+  string
+  .replace( /_+/g, " " )
+  .replace( /\W+/g, " " )
+
 # Build an error object to let the user know something went worng.
 build_error = (message, details) ->
   error = new Error message
@@ -68,15 +89,23 @@ pause = (duration) ->
     callback = -> resolve()
     setTimeout callback, duration
 
-poll_until_true = async (func, options, creds, duration, message) ->
+# Continue calling the async function until truthy value is returned.
+# Takes optional maximum iterations before continuing.
+poll_until_true = async (func, options, creds, duration, message, max) ->
   try
-
+    # Initialize counter if we have a maximum.
+    count = 0  if max?
     while true
+      # Poll the function.
       status = yield func options, creds
       if status
         return status         # Complete.
       else
         yield pause duration  # Not complete. Keep going.
+
+      # Iterate the counter
+      count++ if max?
+      return "WARNING: Max iterations reached.  Continuing Anyway."  if count? > max?
 
   catch error
     return build_error message, error
@@ -108,6 +137,33 @@ get_body = (response) ->
 get_discovery_url = async -> yield get_body( yield https_get( "https://discovery.etcd.io/new"))
 
 
+# This function starts an input configuration object default and merges it with the input.
+default_merge = async (name, unit, default_path) ->
+  final = (parse( yield read_file( default_path)))[name]
+  unless unit == "default"
+    final[key] = unit[key]  for key of unit
+
+  return final
+
+# Render the template of one of many possible service files.  Write to the Launch Directory.
+render_service_template = async (config_name, input) ->
+  template_name = dashed plain_text config_name
+  path_to_template = resolve __dirname, "launch/#{template_name}/#{template_name}.template"
+  path_to_defaults = resolve __dirname, "launch/defaults.cson"
+
+  content = yield render_template config_name, input, path_to_template, path_to_defaults
+  path = resolve __dirname, "launch/#{template_name}/#{input.output_filename}"
+  yield write_file path, content
+
+
+# Render the template of one of the more rare service files that are included in cluster-formation.
+render_formation_service_template = async (config_name, input) ->
+  template_name = dashed plain_text config_name
+  path_to_template = resolve __dirname, "formation-services/#{template_name}.template"
+  path_to_defaults = resolve __dirname, "formation-services/defaults.cson"
+  yield render_template config_name, input, path_to_template, path_to_defaults
+
+
 # Pulls the most recent AWS CloudFormation template from CoreOS.
 pull_cloud_template = async ({channel, virtualization}) ->
   # Set reasonable defaults for these preferences.
@@ -115,7 +171,7 @@ pull_cloud_template = async ({channel, virtualization}) ->
   virtualization ||= "pv"
 
   # This directory has a handy CSON file of URLs for CoreOS's latest CloudFormation templates.
-  template_store = parse( read( resolve( __dirname, "templates.cson")))
+  template_store = parse( yield read_file( resolve( __dirname, "cloudformation-templates.cson")))
   template_url = template_store[channel][virtualization]
 
   try
@@ -129,14 +185,17 @@ pull_cloud_template = async ({channel, virtualization}) ->
 
 
 # Add unit to the cloud-config section of the AWS template.
-add_unit = (cloud_config, unit) ->
+add_unit = async (cloud_config, name, unit) ->
   # The cloud-config file is stored as an array of strings inside the "UserData"
   # object of the AWS template.  We wish to add additional strings to this array.
   # We need to be careful because "cloud-config" files are formatted in YAML,
   # which is sensitive to indentation....
 
+  default_path = resolve __dirname, "formation-services/defaults.cson"
+  unit = yield default_merge name, unit, default_path
+
   # Add to the cloud_config array.
-  cloud_config.push "    - name: #{unit.name}\n"
+  cloud_config.push "    - name: #{unit.output_filename}\n"
   cloud_config.push "      runtime: #{unit.runtime}\n"   if unit.runtime?
   cloud_config.push "      command: #{unit.command}\n"   if unit.command?
   cloud_config.push "      enable: #{unit.enable}\n"     if unit.enable?
@@ -145,7 +204,7 @@ add_unit = (cloud_config, unit) ->
   # For "content", we draw from a unit-file maintained in a separate file. Add
   # eight spaces to the begining of each line (4 indentations) and follow each
   # line with an explicit new-line character.
-  content = read( resolve( __dirname, "formation-services/#{unit.name}"))
+  content = yield render_formation_service_template name, unit
   content = content.split "\n"
 
   while content.length > 0
@@ -244,36 +303,50 @@ build_template = async (options, creds) ->
     delete resources.Ingress4001
     delete resources.Ingress7001
 
-    # Expose the following ports:
-    # - port 22 is exposed to the public Internet for SSH.
-    # - 4001 and 7001 are also exposed publicly to make etcd and inter-machine communication work properly.
-    # - 2000-3000 are addtional ports exposed only to machines within the cluster.
-    # TODO: Lock 4001 and 7001 down so only CoreOS can access.
+    # Expose the following ports...
     resources["ClusterSecurityGroup"] =
       Type: "AWS::EC2::SecurityGroup"
       Properties:
         GroupDescription: "PandaCluster SecurityGroup"
         VpcId: {Ref: "VPC"}
         SecurityGroupIngress: [
-          {
+          { # SSH Exposed to the public Internet
             IpProtocol: "tcp"
             FromPort: "22"
             ToPort: "22"
             CidrIp: "0.0.0.0/0"
           }
-          {
+          { # HTTP Exposed to the public Internet
+            IpProtocol: "tcp"
+            FromPort: "80"
+            ToPort: "80"
+            CidrIp: "0.0.0.0/0"
+          }
+          { # HTTPS Exposed to the public Internet
+            IpProtocol: "tcp"
+            FromPort: "443"
+            ToPort: "443"
+            CidrIp: "0.0.0.0/0"
+          }
+          { # Privileged ports exposed only to machines within the cluster.
             IpProtocol: "tcp"
             FromPort: "2000"
-            ToPort: "3000"
+            ToPort: "2999"
             CidrIp: "10.0.0.0/8"
           }
-          {
+          { # Free ports exposed to public Internet.
+            IpProtocol: "tcp"
+            FromPort: "3000"
+            ToPort: "3999"
+            CidrIp: "0.0.0.0/0"
+          }
+          { # Exposed to Internet for etcd. TODO: Lock down so only CoreOS can access.
             IpProtocol: "tcp"
             FromPort: "4001"
             ToPort: "4001"
             CidrIp: "0.0.0.0/0"
           }
-          {
+          { # Exposed to Internet for clustering. TODO: Lock down so only CoreOS can access.
             IpProtocol: "tcp"
             FromPort: "7001"
             ToPort: "7001"
@@ -286,11 +359,22 @@ build_template = async (options, creds) ->
     resources.CoreOSServerLaunchConfig["DependsOn"] = "ClusterGateway"
     resources.CoreOSServerLaunchConfig.Properties.SecurityGroups = [ {Ref: "ClusterSecurityGroup"} ]
     resources.CoreOSServerLaunchConfig.Properties.AssociatePublicIpAddress = "true"
+    # Also give it a Spot Price if the user seeks to keep the cost down.
+    if options.spot_price?
+      resources.CoreOSServerLaunchConfig.Properties.SpotPrice = options.spot_price
 
     # Modify the object specifying the cluster's auto-scaling group.  Associate with the VPC.
     resources.CoreOSServerAutoScale["DependsOn"] = "ClusterGateway"
     resources.CoreOSServerAutoScale.Properties["VPCZoneIdentifier"] = [{Ref: "ClusterSubnet"}]
     resources.CoreOSServerAutoScale.Properties.AvailabilityZones = ["us-west-1c"]
+
+    # Associate the cluster's auto-scaling group with the user-specified tags.
+    if options.tags.length > 0
+      resources.CoreOSServerAutoScale.Properties.Tags = []
+      for tag in options.tags
+        new_tag = tag
+        new_tag["PropagateAtLaunch"] = "true"
+        resources.CoreOSServerAutoScale.Properties.Tags.push new_tag
 
     # Place "Resources" back into the JSON template object.
     template_object.Resources = resources
@@ -305,12 +389,12 @@ build_template = async (options, creds) ->
     cloud_config = user_data["Fn::Base64"]["Fn::Join"][1]
 
     # Add the specified units to the cloud-config section.
-    unless options.formation_units == []
-      for x in options.formation_units
-        cloud_config = add_unit cloud_config, x
+    if options.formation_service_templates?
+      for x of options.formation_service_templates
+        cloud_config = yield add_unit cloud_config, x, options.formation_service_templates[x]
 
     # Add the specified public keys.  We must be careful with indentation formatting.
-    unless options.public_keys == []
+    unless options.public_keys == [] || options.public_keys == null
       cloud_config.push "ssh_authorized_keys: \n"
       for x in options.public_keys
         cloud_config.push "  - #{x}\n"
@@ -374,7 +458,7 @@ launch_stack = async (options, creds) ->
 
       { # InstanceType
         "ParameterKey": "InstanceType"
-        "ParameterValue": options.instance_type || "m3.medium"
+        "ParameterValue": options.instance_type || "m1.medium"
       }
 
       { # ClusterSize
@@ -434,6 +518,52 @@ get_formation_status = async (options, creds) ->
     return build_error "Unable to access AWS CloudFormation.", err
 
 
+get_cluster_subnet = async (options, creds) ->
+  AWS.config = set_aws_creds creds
+  cf = new AWS.CloudFormation()
+  describe_resources = lift_object cf, cf.describeStackResources
+
+  params =
+    StackName: options.stack_name
+    LogicalResourceId: "ClusterSubnet"
+
+  try
+    data = yield describe_resources params
+    return data.StackResources[0].PhysicalResourceId
+  catch error
+    build_error "Unable to access AWS CloudFormation.", error
+
+
+get_spot_status = async (options, creds) ->
+  AWS.config = set_aws_creds creds
+  ec2 = new AWS.EC2()
+  describe_spot = lift_object ec2, ec2.describeSpotInstanceRequests
+
+  params =
+    Filters: [
+      {
+        Name: "network-interface.subnet-id"
+        Values: [options.subnet_id]
+      }
+    ]
+
+  try
+    data = yield describe_spot params
+
+    if data.SpotInstanceRequests.length == 0
+      return false # Request has yet to be created.
+    else if data.SpotInstanceRequests[0].State == "open"
+      return false # Request is pending.
+    else if data.SpotInstanceRequests[0].State == "active"
+      return {
+        result: "active"
+        instance_id: data.SpotInstanceRequests[0].InstanceId
+      }
+    else
+      throw build_error "Spot Request failed.", data.SpotInstanceRequests[0].State
+  catch error
+    console.log error
+    return build_error "Unable to access AWS EC2.", error
 
 #-------------------------
 # Cluster Customization
@@ -444,36 +574,62 @@ get_formation_status = async (options, creds) ->
 #----------------------------
 # Return the public facing IP address of a single machine from the cluster we just
 # created.
-get_cluster_ip_address = async (options, creds) ->
-    AWS.config = set_aws_creds creds
-    ec2 = new AWS.EC2()
-    describe_instances = lift_object ec2, ec2.describeInstances
+get_spot_ip_address = async (options, creds) ->
+  AWS.config = set_aws_creds creds
+  ec2 = new AWS.EC2()
+  describe_instances = lift_object ec2, ec2.describeInstances
 
-    params =
-      Filters: [
-        {
-          Name: "tag:aws:cloudformation:stack-name"
-          Values: [
-            options.stack_name  # Only examine instances within the stack we just created.
-          ]
-        }
-        {
-          Name: "instance-state-code"
-          Values: [
-            "16"      # Only examine running instances.
-          ]
-        }
-      ]
-
-    try
-      data = yield describe_instances params
-      return {
-        ip_address: data.Reservations[0].Instances[0].PublicIpAddress
-        private_ip_address: data.Reservations[0].Instances[0].PrivateIpAddress
+  params =
+    Filters: [
+      {
+        Name: "instance-id"
+        Values: [options.instance_id]
       }
+    ]
 
-    catch error
-      return build_error "Unable to access AWS EC2.", error
+  try
+    data = yield describe_instances params
+    return {
+      ip_address: data.Reservations[0].Instances[0].PublicIpAddress
+      private_ip_address: data.Reservations[0].Instances[0].PrivateIpAddress
+    }
+
+  catch error
+    console.log error
+    return build_error "Unable to access AWS EC2.", error
+
+
+get_on_demand_ip_address = async (options, creds) ->
+  AWS.config = set_aws_creds creds
+  ec2 = new AWS.EC2()
+  describe_instances = lift_object ec2, ec2.describeInstances
+
+  params =
+    Filters: [
+      {
+        Name: "tag:aws:cloudformation:stack-name"
+        Values: [
+          options.stack_name  # Only examine instances within the stack we just created.
+        ]
+      }
+      {
+        Name: "instance-state-code"
+        Values: [
+          "16"      # Only examine running instances.
+        ]
+      }
+    ]
+
+  try
+    data = yield describe_instances params
+    return {
+      ip_address: data.Reservations[0].Instances[0].PublicIpAddress
+      private_ip_address: data.Reservations[0].Instances[0].PrivateIpAddress
+    }
+
+  catch error
+    console.log error
+    return build_error "Unable to access AWS EC2.", error
 
 
 # Given a URL of many possible formats, return the root domain.
@@ -693,6 +849,7 @@ set_hostname = async (options, creds) ->
       return yield add_dsn_record params, creds
 
   catch error
+    console.log error
     return build_error "Unable to set the hostname to the cluster's IP address.", error
 
 
@@ -822,8 +979,9 @@ prepare_kick = async (options, creds) ->
     {result, change_id} = yield add_dns_record params, creds
     output.register_kick = result
     output.detect_registration = yield poll_until_true get_dns_change_status,
-      change_id, creds, 5000, "Unable to detect Kick registration."
+      change_id, creds, 5000, "Unable to detect Kick registration.", 25
 
+    console.log "Building Kick Container...  This will take a moment."
     # Build the Kick's Docker container from its Dockerfile.
     command =
       "ssh -o \"StrictHostKeyChecking no\" core@#{options.hostname} << EOF\n" +
@@ -833,7 +991,9 @@ prepare_kick = async (options, creds) ->
 
     output.build_kick = yield execute command
 
-    # Activate the kick-server and pass in the user's AWS credentials.
+    # Activate the kick server and pass in the user's AWS credentials.  We need to get the
+    # credentials *into* the kick server at runtime and obey CSON formatting rules.  That's
+    # why we rely on a runtime `sed` command to make it happen and not store your creds anywhere else.
     options.dns_zone_id = options.dns_zone_id.split("/")[2]
 
     command =
@@ -856,49 +1016,62 @@ prepare_kick = async (options, creds) ->
       "source ~/.nvm/nvm.sh && nvm use 0.11 && " +
       "coffee --nodejs --harmony /panda-cluster-kick/kick.coffee\" \n" +
       "EOF"
-    console.log command
     output.run_kick = yield execute command
     return build_success "The Kick Server is online.", output
 
   catch error
+    return build_error "Unable to install the Kick Server.", error
+
+
+
+# Helper function that launches a single unit from PandaCluster's library onto the cluster.
+launch_service_unit = async (name, hostname) ->
+  try
+    name = dashed plain_text name
+    # Place a copy of the customized unit file on the cluster.
+    command =
+      "scp -o \"StrictHostKeyChecking no\" " +
+      "-r #{__dirname}/launch/#{name} " +
+      "core@#{hostname}:/home/core/launch"
+
+    yield execute command
+
+    # Launch the service
+    command =
+      "ssh -o \"StrictHostKeyChecking no\" core@#{hostname} << EOF\n" +
+      "fleetctl start launch/#{name}/#{name}.service \n" +
+      "EOF"
+
+    return build_success "Service #{name} launched.", yield execute command
+
+  catch error
     console.log error
-    return build_error "Unable to install the Launch Repository.", error
+    return build_error "Unable to launch service unit.", error
 
 
+# Launch all services listed in the config file.
+launch_services = async (options, creds) ->
+  try
+    for unit of options.service_templates
+      config = options.service_templates[unit]
 
+      # Add shared data to this section of the template as a default.
+      unless config.public_keys?
+        config.public_keys = options.public_keys
+      unless config.kick_address?
+        {dns} = options
+        if dns[dns.length - 1] == "."  # If address is fully qualified, get rid of the "."
+          dns = dns.slice(0, dns.length - 1)
+        config.kick_address = "kick.#{dns}:2000"
 
-# # Helper function that launches a single unit from PandaCluster's library onto the cluster.
-# launch_service_unit = async (name, hostname) ->
-#   try
-#     # Place a copy of the customized unit file on the cluster.
-#     execute "scp #{__dirname}/services/#{name}  core@#{hostname}:/home/core/services/."
-#
-#     # Launch the service
-#     command =
-#       "ssh  core@#{hostname} << EOF\n" +
-#       "fleetctl start launch/#{name}\n" +
-#       "EOF"
-#
-#     execute command
-#
-#   catch error
-#     return build_error "Unable to launch service unit.", error
-#
-#
-# # Place a hook-server on the cluster that will respond to users' git commands
-# # and launch githook scripts.  The hook-server is loaded with all cluster public keys.
-# launch_hook_server = async (options) ->
-#   try
-#     config = options.hook_server
-#
-#     # Customize the hook-server unit file template.
-#     # Add public SSH keys.
-#
-#     # Launch
-#     yield launch_service_unit "hook-server.service", config.hostname
-#
-#   catch error
-#     return build_error "Unable to install hook-server into cluster.", error
+      # Render the template.
+      yield render_service_template unit, config
+      # Launch into the cluster.
+      yield launch_service_unit unit, options.hostname
+
+  catch error
+    console.log error
+    return build_error "Unable to install hook-server into cluster.", error
 
 
 # After cluster formation is complete, launch a variety of services
@@ -917,20 +1090,31 @@ customize_cluster = async (options, creds) ->
       data.set_hostname = build_success "No hostname specified, using cluster IP Address.", options.ip_address
       options.hostname = options.ip_address
 
-    # Establish a private DNS service available only on the cluster.
-    {result, change_id, zone_id} = yield launch_private_dns options, creds
-    options.dns_zone_id = zone_id
-    data.launch_private_dns = result
-    data.detect_private_dns_formation = yield poll_until_true get_dns_change_status,
-      change_id, creds, 5000, "Unable to detect Private DNS formation."
+    console.log "Cluster Hostname Set"
 
-    # Establish the Launch Repository and Bootstrap the Kick Server
+    # Establish a private DNS service available only on the cluster.
+    options.dns ||= "panda.awesome."     # "smart default" for private dns hostedzone domain.
+    {result, change_id, zone_id} = yield launch_private_dns options, creds
+    console.log "Private DNS launched: #{change_id} #{zone_id}"
+    data.launch_private_dns = result
+    options.dns_zone_id = zone_id
+    data.detect_private_dns_formation = yield poll_until_true get_private_dns_status,
+      change_id, creds, 5000, "Unable to detect Private DNS formation."
+    console.log "Private DNS fully online."
+
+    # Establish the Launch Repository, Kick Server, and Hook Server.
     data.prepare_launch_directory = yield prepare_launch_directory options
+    console.log "Launch Directory Created."
     data.prepare_kick = yield prepare_kick options, creds
+    console.log "\n\n\nKick Server Online."
+
+    # Launch any listed services into the cluster.
+    data.launch_services = yield launch_services options, creds
 
     return build_success "Cluster customizations are complete.", data
 
   catch error
+    console.log error
     return build_error "Unable to properly configure cluster.", error
 
 
@@ -965,15 +1149,34 @@ module.exports =
       # Make calls to Amazon's API. Gather data as we go.
       data = {}
       data.launch_stack = yield launch_stack(options, credentials)
+      console.log "Stack Launched."
 
-      # Monitor the cluster until it is fully deployed.
+      # Monitor the CloudFormation stack until it is fully created.
       data.detect_formation = yield poll_until_true get_formation_status, options,
        credentials, 5000, "Unable to detect cluster formation."
+      console.log "Stack Formation Complete."
 
-      # Now that the cluster is fully formed, grab its IP address for later.
-      {ip_address, private_ip_address} = yield get_cluster_ip_address( options, credentials)
-      options.ip_address = ip_address
-      options.private_ip_address = private_ip_address
+      # If we're using spot instances, we'll need to wait and detect when our Spot Request has been fulfilled.
+      if options.spot_price?
+        options.subnet_id = yield get_cluster_subnet options, credentials
+        data.detect_spot_fulfillment = yield poll_until_true get_spot_status, options,
+         credentials, 5000, "Unable to detect Spot Instance fulfillment."
+
+        options.instance_id = (yield get_spot_status options, credentials).instance_id
+        console.log "Spot Instance Fulfilled: #{options.instance_id}"
+
+        # Now that the cluster is fully formed, grab its IP address for later.
+        {ip_address, private_ip_address} = yield get_spot_ip_address( options, credentials)
+        options.ip_address = ip_address
+        options.private_ip_address = private_ip_address
+        console.log "IP Addresses: #{ip_address} #{private_ip_address}"
+
+      else
+        # Now that the cluster is fully formed, grab its IP address for later.
+        {ip_address, private_ip_address} = yield get_on_demand_ip_address( options, credentials)
+        options.ip_address = ip_address
+        options.private_ip_address = private_ip_address
+        console.log "IP Addresses: #{ip_address} #{private_ip_address}"
 
       # Continue setting up the cluster.
       data.customize_cluster = yield customize_cluster( options, credentials)

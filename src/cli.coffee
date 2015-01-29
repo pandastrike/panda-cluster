@@ -120,7 +120,7 @@ if argv.length == 0 || argv[0] == "-h" || argv[0] == "help"
 switch argv[0]
   when "create"
     options = parse_cli "create", argv[1..]
-    options.formation_units = gather_formation_units options
+    #options.formation_units = gather_formation_units options
     PC.create options
   when "destroy"
     options = parse_cli "destroy", argv[1..]
