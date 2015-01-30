@@ -634,6 +634,7 @@ module.exports =
 
   # This method stops and destroys a CoreOS cluster.
   destroy: async (options) ->
+    console.log "*****pandacluster destroy: ", options
     credentials = options.aws
     credentials.region = options.region || credentials.region
 

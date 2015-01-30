@@ -22,6 +22,7 @@ module.exports = async ->
       url: String
       name: String
     ###
+
     create: async ({respond, url, data}) ->
       data = yield data
       cluster_url = make_key()
@@ -37,30 +38,30 @@ module.exports = async ->
         create_request.stack_name = cluster_name
         # FIXME: uncomment
         #res = yield pandacluster.create create_request
+        delete create_request.stack_name
+        console.log "*****user in create cluster: ", user
         respond 201, "", cluster_url: url "cluster", {cluster_url}
       else
         respond 401, "invalid email or token"
 
   cluster:
 
-    #delete: async ({respond, match: {path: {cluster_url}}, data}) ->
-    delete: async (block) ->
-      body = yield block
-      console.log "*****secret token: ", yield block.secret_token
-      console.log "*****email: ", yield block.email
-      console.log "*****block: ", body
-      console.log "*****delete data1: ", data
-      data = yield data
-      console.log "*****delete cluster url: ", cluster_url
-      console.log "*****delete data2: ", data
-      user = yield users.get data.email
-      if user && data.secret_token == user.secret_token
+    # FIXME: pass in secret token in auth header
+    delete: async ({respond, match: {path: {cluster_url}}, secret_token}) ->
+      cluster = yield clusters.get cluster_url
+      console.log "*****cluster retrieved during delete: ", cluster
+      {email} = cluster
+      user = yield users.get email
+      console.log "*****user retrieved during delete: ", user
+      # FIXME: validate secret token
+      #if user && secret_token == user.secret_token
+      if user
         cluster = yield clusters.get cluster_url
         request_data =
           aws: user.aws
           stack_name: cluster.name
         yield clusters.delete cluster_url
-        pandacluster.delete request_data
+        pandacluster.destroy request_data
         respond 200
       else
         respond 401, "invalid email or token"
@@ -80,11 +81,14 @@ module.exports = async ->
       key_pair: String
       aws: Object
       email: String
+      secret_token: String
     ###
+
     create: async ({respond, url, data}) ->
       key = make_key()
       data.secret_token = key
       user = yield data
       user.secret_token = key
+      console.log "*****user created: ", user
       yield users.put user.email, user
       respond 201, "", secret_token: key

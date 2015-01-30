@@ -66,8 +66,9 @@ amen.describe "Huxley API", (context) ->
 
       context.test "Delete a cluster", ->
 
+
         {response} =
           (yield cluster.delete
-            data:
-              secret_token: secret_token
-              email: email)
+            headers:
+              Authorization: secret_token)
+              
