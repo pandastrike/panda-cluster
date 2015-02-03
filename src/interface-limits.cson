@@ -1,0 +1,15 @@
+#===============================================================================
+# PandaCluster - AWS Elastic Network Interface Limits
+#===============================================================================
+# This CSON object lists the current limits for placing Elastic Network Interfaces
+# (ENI) into an EC2 instance.  ENI are virtual network interfaces for your instance
+# and can accept IP traffic at a private IP address they are assigned.  The
+# number of ENI and IP addresses that can be assigned are based on the instance type.
+#
+# Amazon list the most recent limits here:
+# http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-eni.html
+#===============================================================================
+
+"m1.medium":
+  max_eni: 2
+  max_private: 6

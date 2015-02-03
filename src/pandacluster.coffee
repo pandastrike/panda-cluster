@@ -14,7 +14,7 @@ https = require "https"
 {writeFileSync} = require "fs"
 
 # Awsome functional style tricks.
-{where} = require "underscore"
+{where, pluck, every} = require "underscore"
 
 # When Library
 {promise, lift} = require "when"
@@ -35,6 +35,21 @@ AWS = require "aws-sdk"
 #================================
 # Helper Functions
 #================================
+# Create a map whose objects are a subset of their original input.  "key" is
+# a simple string naming the target object's *key* (cannot filter based on *value*).
+# "new_key" is optional and allows the new map to use a different string for its keys.
+subset = (map, key, new_key) ->
+  result = []
+  values = pluck(map, key)
+  new_key ||= key
+
+  for value in values
+    temp = {}
+    temp[new_key] = value
+    result.push temp
+
+  return result
+
 # Lift Node's async read/write functions.
 {read_file, write_file} = do ->
   {readFile, writeFile} = liftAll(require "fs")
@@ -280,7 +295,7 @@ build_template = async (options, creds) ->
             Value: options.stack_name
           }]
 
-    # Add an object speicfying a Route for public addresses (through the Internet Gateway).
+    # Add an object specifying a Route for public addresses (through the Internet Gateway).
     resources["PublicRoute"] =
       Type: "AWS::EC2::Route"
       DependsOn: "ClusterGateway"
@@ -412,12 +427,16 @@ build_template = async (options, creds) ->
 
 # Configure the AWS object for account access.
 set_aws_creds = (creds) ->
-  return {
-    accessKeyId: creds.id
-    secretAccessKey: creds.key
-    region: creds.region
-    sslEnabled: true
-  }
+  try
+    return {
+      accessKeyId: creds.id
+      secretAccessKey: creds.key
+      region: creds.region
+      sslEnabled: true
+    }
+  catch error
+    console.log "AWS Credential Issue.", error
+    return build_error "Unable to configure AWS.config object", error
 
 
 # Confirm that the named SSH key exists in your AWS account.
@@ -549,21 +568,213 @@ get_spot_status = async (options, creds) ->
 
   try
     data = yield describe_spot params
+    state = pluck data.SpotInstanceRequests, "State"
+    is_active = (state) -> state == "active"
 
-    if data.SpotInstanceRequests.length == 0
+    if state.length == 0
       return false # Request has yet to be created.
-    else if data.SpotInstanceRequests[0].State == "open"
-      return false # Request is pending.
-    else if data.SpotInstanceRequests[0].State == "active"
+    else if every( state, is_active)
       return {
-        result: "active"
-        instance_id: data.SpotInstanceRequests[0].InstanceId
+        result: build_success "Spot Request Fulfilled.", data
+        instances: subset(data.SpotInstanceRequests, "InstanceId", "id")
       }
     else
-      throw build_error "Spot Request failed.", data.SpotInstanceRequests[0].State
+      return false # Request is pending.
+
+
   catch error
     console.log error
     return build_error "Unable to access AWS EC2.", error
+
+
+
+#-------------------------
+# Network Interfaces
+#-------------------------
+
+create_network_interface = async (options, creds) ->
+  AWS.config = set_aws_creds creds
+  ec2 = new AWS.EC2()
+  create_interface = lift_object ec2, ec2.createNetworkInterface
+
+  params =
+    SubnetId: options.subnet_id
+    SecondaryPrivateIpAddressCount: options.max_private - 1
+
+  try
+    data = yield create_interface params
+    return {
+      new_eni: data.NetworkInterface.NetworkInterfaceId
+      private_ip: pluck data.NetworkInterface.PrivateIpAddresses, "PrivateIpAddress"
+    }
+  catch error
+    console.log error
+    return build_error "Unable to access AWS EC2.", error
+
+delete_network_interface = async (interface_id, creds) ->
+  AWS.config = set_aws_creds creds
+  ec2 = new AWS.EC2()
+  delete_interface = lift_object ec2, ec2.deleteNetworkInterface
+
+  params = {NetworkInterfaceId: interface_id}
+
+  try
+    data = yield delete_interface params
+  catch error
+    console.log error
+    return build_error "Unable to access AWS EC2.", error
+
+
+attach_network_interface = async (eni_id, instance_id, device_index, creds) ->
+  AWS.config = set_aws_creds creds
+  ec2 = new AWS.EC2()
+  attach_interface = lift_object ec2, ec2.attachNetworkInterface
+
+  params =
+    DeviceIndex: device_index
+    InstanceId: instance_id
+    NetworkInterfaceId: eni_id
+
+  try
+    data = yield attach_interface params
+  catch error
+    console.log error
+    return build_error "Unable to access AWS EC2.", error
+
+detach_network_interface = async (attachment_id, creds) ->
+  AWS.config = set_aws_creds creds
+  ec2 = new AWS.EC2()
+  detach_interface = lift_object ec2, ec2.detachNetworkInterface
+
+  params =
+    AttachmentId: attachment_id
+    Force: true
+
+  try
+    data = yield detach_interface params
+  catch error
+    console.log error
+    return build_error "Unable to access AWS EC2.", error
+
+
+# Determine status of Elastic Network Interface (ENI).
+get_eni_status = async (interface_id, creds) ->
+  AWS.config = set_aws_creds creds
+  ec2 = new AWS.EC2()
+  describe_interface = lift_object ec2, ec2.describeNetworkInterfaces
+
+  try
+    data = yield describe_interface {NetworkInterfaceIds: [interface_id]}
+    return data.NetworkInterfaces[0].Status
+  catch error
+    console.log error
+    return build_error "Unable to accesss AWS EC2.", error
+
+is_eni_attached = async (interface_id, creds) ->
+  result = yield get_eni_status interface_id, creds
+  if result == "in-use"
+    return true
+  else
+    return false
+
+is_eni_free = async (interface_id, creds) ->
+  result = yield get_eni_status interface_id, creds
+  if result == "available"
+    return true
+  else
+    return false
+
+# Using given instanceID, find and delete any attached ENI.
+delete_attached_eni = async (instance_id, creds) ->
+  AWS.config = set_aws_creds creds
+  ec2 = new AWS.EC2()
+
+  # First, get any attached ENI.
+  describe_instances = lift_object ec2, ec2.describeInstances
+
+  params =
+    Filters: [
+      {
+        Name: "instance-id",
+        Values: [instance_id]
+      }
+    ]
+
+  try
+    data = yield describe_instances params
+    eni_data = data.Reservations[0].Instances[0].NetworkInterfaces
+
+    if eni_data.length != 0
+      for i in [0..eni_data.length - 1]
+        console.log "Deleting ENI - #{eni_data[i].NetworkInterfaceId}"
+        yield detach_network_interface eni_data[i].Attachment.AttachmentId, creds
+        yield poll_until_true is_eni_free, eni_data[i].NetworkInterfaceId, creds, 5000, "Unable to detect ENI detachment."
+        yield delete_network_interface eni_data[i].NetworkInterfaceId, creds
+
+  catch error
+    console.log error
+    return build_error "Unable to access AWS EC2", error
+
+
+# For every instance, we need to create as many Elastic Network Interfaces (ENI) as we can...
+# with as many private IP addresses as we can.  Soon, these will address individual Docker containers.
+# ENI assignment is done here (rather than in templating + spot assignment) to keep the code in one place
+build_network_interfaces = async (options, creds) ->
+  try
+    # Lookup the maximum number of ENI and private IP addresses allowed.
+    limits = parse( yield read_file( resolve( __dirname, "interface-limits.cson")))
+    {max_eni, max_private} = limits[options.instance_type]
+    options.max_private = max_private
+
+
+    # # Each instance gets one ENI automatically when launched into the VPC.  Delete them.
+    # console.log "Removing Defualt ENIs"
+    # for instance_id in instance_id_list
+    #   yield delete_attached_eni instance_id, creds
+
+    # Create (and then request to attach) the maximum number of private IP addresses to every instance.
+    eni_id_list = []
+    private_ip_list = []
+    instance_id_list = pluck options.instances, "id"
+
+    for instance_id in instance_id_list
+      device_index = 3
+
+      for [1..(max_eni - 1)]
+        console.log "Creating new ENI."
+        {new_eni, private_ip} = yield create_network_interface options, creds
+        eni_id_list.push new_eni
+        private_ip_list.push private_ip
+
+        console.log "Adding ENI to #{instance_id}"
+        yield attach_network_interface new_eni, instance_id, device_index, creds
+        device_index++
+
+    # Now we wait for every ENI to be attached to its instance.  This attachment can happen
+    # in parallel, so we poll after all requests to be more efficient.
+    for id in eni_id_list
+      yield poll_until_true is_eni_attached, id, creds, 5000, "Unable to detect ENI attachment."
+
+
+  catch error
+    console.log error
+    return build_error "Unable to construct Elastic Network Interfaces", error
+
+interface_test = async (options, creds) ->
+  AWS.config = set_aws_creds creds
+  ec2 = new AWS.EC2()
+  describe_ni = lift_object ec2, ec2.describeNetworkInterfaces
+
+  try
+    data = yield describe_ni {}
+    # Dig the VPC ID out of the data object and return it.
+    console.log data.NetworkInterfaces[0].PrivateIpAddresses
+
+  catch error
+    return build_error "Unable to access AWS EC2.", error
+
+
+
 
 #-------------------------
 # Cluster Customization
@@ -572,9 +783,8 @@ get_spot_status = async (options, creds) ->
 #----------------------------
 # General DNS Fucntions
 #----------------------------
-# Return the public facing IP address of a single machine from the cluster we just
-# created.
-get_spot_ip_address = async (options, creds) ->
+# Return the public and private facing IP address of a single instance.
+get_ip_address = async (instance_id, creds) ->
   AWS.config = set_aws_creds creds
   ec2 = new AWS.EC2()
   describe_instances = lift_object ec2, ec2.describeInstances
@@ -583,15 +793,15 @@ get_spot_ip_address = async (options, creds) ->
     Filters: [
       {
         Name: "instance-id"
-        Values: [options.instance_id]
+        Values: [instance_id]
       }
     ]
 
   try
     data = yield describe_instances params
     return {
-      ip_address: data.Reservations[0].Instances[0].PublicIpAddress
-      private_ip_address: data.Reservations[0].Instances[0].PrivateIpAddress
+      public_ip: data.Reservations[0].Instances[0].PublicIpAddress
+      private_ip: data.Reservations[0].Instances[0].PrivateIpAddress
     }
 
   catch error
@@ -599,7 +809,7 @@ get_spot_ip_address = async (options, creds) ->
     return build_error "Unable to access AWS EC2.", error
 
 
-get_on_demand_ip_address = async (options, creds) ->
+get_on_demand_instances = async (options, creds) ->
   AWS.config = set_aws_creds creds
   ec2 = new AWS.EC2()
   describe_instances = lift_object ec2, ec2.describeInstances
@@ -622,11 +832,7 @@ get_on_demand_ip_address = async (options, creds) ->
 
   try
     data = yield describe_instances params
-    return {
-      ip_address: data.Reservations[0].Instances[0].PublicIpAddress
-      private_ip_address: data.Reservations[0].Instances[0].PrivateIpAddress
-    }
-
+    return subset(data.Reservations[0].Instances, "InstanceId", "id")
   catch error
     console.log error
     return build_error "Unable to access AWS EC2.", error
@@ -912,7 +1118,7 @@ launch_private_dns = async (options, creds) ->
     return build_error "Unable to establish the cluster's private DNS.", error
 
 
-# This function checks the specified Hosted Zone to see if its "INSYC", done updating.
+# This function checks the specified Hosted Zone to see if it's "INSYC", done updating.
 # It returns either true or false, and throws an exception if an AWS error is reported.
 get_private_dns_status = async (change_id, creds) ->
     AWS.config = set_aws_creds creds
@@ -1133,8 +1339,6 @@ destroy_cluster = async (params, creds) ->
   catch err
     throw build_error "Unable to access AWS Cloudformation.", err
 
-
-
 #===============================
 # PandaCluster Definition
 #===============================
@@ -1149,39 +1353,52 @@ module.exports =
       # Make calls to Amazon's API. Gather data as we go.
       data = {}
       data.launch_stack = yield launch_stack(options, credentials)
-      console.log "Stack Launched."
+      console.log "Stack Launched.  Waiting for Formation."
 
       # Monitor the CloudFormation stack until it is fully created.
       data.detect_formation = yield poll_until_true get_formation_status, options,
        credentials, 5000, "Unable to detect cluster formation."
       console.log "Stack Formation Complete."
 
-      # If we're using spot instances, we'll need to wait and detect when our Spot Request has been fulfilled.
+      # Grab the Subnet ID of the subnet in our VPC.
+      options.subnet_id = yield get_cluster_subnet options, credentials
+
+      # Do we have Spot Instances or On-Demand Instances?
       if options.spot_price?
-        options.subnet_id = yield get_cluster_subnet options, credentials
-        data.detect_spot_fulfillment = yield poll_until_true get_spot_status, options,
+        console.log "Waiting for Spot Instance Fulfillment."
+        # Spot Instances - wait for our Spot Request to be fulfilled.
+        {result, instances} = yield poll_until_true get_spot_status, options,
          credentials, 5000, "Unable to detect Spot Instance fulfillment."
 
-        options.instance_id = (yield get_spot_status options, credentials).instance_id
-        console.log "Spot Instance Fulfilled: #{options.instance_id}"
-
-        # Now that the cluster is fully formed, grab its IP address for later.
-        {ip_address, private_ip_address} = yield get_spot_ip_address( options, credentials)
-        options.ip_address = ip_address
-        options.private_ip_address = private_ip_address
-        console.log "IP Addresses: #{ip_address} #{private_ip_address}"
+        data.detect_spot_fulfillment = result
+        options.instances = instances
+        console.log "Spot Request Fulfilled. Instance Online."
 
       else
-        # Now that the cluster is fully formed, grab its IP address for later.
-        {ip_address, private_ip_address} = yield get_on_demand_ip_address( options, credentials)
-        options.ip_address = ip_address
-        options.private_ip_address = private_ip_address
-        console.log "IP Addresses: #{ip_address} #{private_ip_address}"
+        # On-Demand Instances - already active from CloudFormation.
+        options.instances = yield get_on_demand_instances options, credentials
+        console.log "On-Demand Instance Online."
+
+      # Get the IP addresses to our instances.
+      console.log "Assigning Primary Public and Private IP Addresses."
+      for i in [0..options.instances.length - 1]
+        {id} = options.instances[i]
+        {public_ip, private_ip} = yield get_ip_address(id, credentials)
+        options.instances[i] =
+          id: id
+          public_ip: public_ip
+          private_ip: [private_ip]
+        console.log "Instance #{id}: #{public_ip} #{private_ip}"
+
+      # Establish network interfaces for each instance in the cluster.
+      console.log "Building ENIs."
+      options.network_interfaces = yield build_network_interfaces options, credentials
 
       # Continue setting up the cluster.
-      data.customize_cluster = yield customize_cluster( options, credentials)
+      #data.customize_cluster = yield customize_cluster( options, credentials)
 
-      console.log  JSON.stringify data, null, '\t'
+      console.log "Done. \n"
+      #console.log  JSON.stringify data, null, '\t'
       return build_success "The requested cluster is online, configured, and ready.",
         data
 
