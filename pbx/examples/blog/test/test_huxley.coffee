@@ -31,9 +31,11 @@ amen.describe "Huxley API", (context) ->
 
     assert.ok api
 
-    {response: {headers: {secret_token}}} =
+    {data} =
       (yield api.users.create aws)
 
+    data = JSON.parse (yield data)
+    {secret_token} = data.user
     assert.ok secret_token
 
     clusters = (api.clusters)
@@ -51,24 +53,24 @@ amen.describe "Huxley API", (context) ->
 
       console.log "*****creating a cluster test"
 
-      {response: {headers: {cluster_url}}} =
+      {data} =
         (yield clusters.create
             cluster_name: cluster_name
             secret_token: secret_token
             email: email)
 
-      console.log "*****cluster_url: ", cluster_url
+      data = JSON.parse (yield data)
+      {cluster_url} = data
       assert.ok cluster_url
 
+      console.log "*****cluster url: ", cluster_url
       cluster = (api.cluster cluster_url)
 
       console.log "*****cluster to delete client object: ", cluster.delete
 
       context.test "Delete a cluster", ->
 
-
         {response} =
           (yield cluster.delete
-            headers:
-              Authorization: secret_token)
-              
+          .auth authorization: secret_token
+          .invoke())

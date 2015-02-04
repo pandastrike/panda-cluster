@@ -35,6 +35,7 @@
     "mustache": "^1.0.0",
     "nock": "^0.56.0",
     "shelljs": "^0.3.0",
+    "shred": "^1.1.0-alpha-03",
     "underscore": "^1.7.0",
     "when": "^3.6.4"
   },

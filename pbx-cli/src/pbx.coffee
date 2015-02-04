@@ -1,33 +1,46 @@
-{call} = require "when/generator"
-{discover} = require "../../../src/client"
+{lift} = require "when"
+async = (require "when/generator").lift
+{discover} = require "./client"
 
-call ->
-  try
-    pandaconfig = yield cson.parse (read(resolve("#{process.env.HOME}/.pandacluster.cson")))
-  catch error
-    assert.fail error, null, "Credential file ~/.pandacluster.cson missing"
-
-api = yield discover pandaconfig.url
 
 module.exports =
 
-  create_cluster: ({cluster_name, secret_token, email}) ->
+  create_cluster: async ({cluster_name, email, secret_token, url}) ->
 
+    api = (yield discover url)
     clusters = (api.clusters)
-    {response} = (yield clusters.create {cluster_name, secret_token, email})
-    response
+    {data} = (yield clusters.create {cluster_name, email, secret_token})
+    data = (yield data)
 
-  create_user: (config) ->
+#  get_cluster_status: async ({cluster_name, email, secret_token, url}) ->
+#
+#    api = (yield discover url)
+#    clusters = (api.clusters)
+#    {data} = (yield clusters.get_status {cluster_name, email, secret_token})
+#    data = (yield data)
 
+  get_cluster_status: async ({cluster_url, secret_token, url}) ->
+
+    api = (yield discover url)
+    cluster = (api.cluster cluster_url)
+    {response} =
+      (yield cluster.get_status())
+    data = (yield response)
+
+  # FIXME: filter out secret keys in response
+  create_user: async ({aws, email, url, key_pair, public_keys}) ->
+
+    api = (yield discover url)
     users = (api.users)
-    {response} = (yield users.create config)
-    response
+    {data} = (yield users.create {aws, email, key_pair, public_keys})
+    data = (yield data)
 
-  delete_cluster: ({cluster_url, secret_token}) ->
+  delete_cluster: async ({cluster_url, secret_token, url}) ->
+
+    api = (yield discover url)
     cluster = (api.cluster cluster_url)
     {response} =
       (yield cluster.delete
         headers:
           Authorization: secret_token)
-    response
-          
+    data = (yield response)

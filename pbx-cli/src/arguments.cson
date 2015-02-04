@@ -74,7 +74,7 @@ create_cluster:[
   }
 ]
 
-destroy_cluster:[
+delete_cluster:[
   {
     name: "stack_name"
     flag: "-n"

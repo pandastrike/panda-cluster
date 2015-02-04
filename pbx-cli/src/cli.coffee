@@ -13,11 +13,13 @@
 {read, write, remove} = require "fairmont" # Awesome utility functions.
 {parse} = require "c50n"                   # Awesome .cson file parsing
 
+{call} = require "when/generator"
+
 # Awesome manipulations in the functional style.
 {pluck, where, flatten} = require "underscore"
 
 # Access PandaCluster!!
-PC = require "./pandacluster"
+PC = require "./pbx"
 
 
 #===============================================================================
@@ -30,7 +32,7 @@ is_integer = (value) -> parseInt(value, 10) != NaN
 # Output an Info Blurb and optional message.
 usage = (entry, message) ->
   if message?
-    throw "#{message}\n" + read( resolve( __dirname, "..", "doc", entry ) )
+    throw "#{message}\n" + read( resolve( __dirname, "../..", "doc", entry ) )
   else
     throw read( resolve( __dirname, "..", "doc", entry ) )
 
@@ -92,20 +94,6 @@ parse_cli = (command, argv) ->
   return options
 
 
-# We must finalize the array "options.formation_units".  This
-# variable is an array of objects detailing which services are launched during
-# cluster formation.  The list of all available units is in "src/services/formation-units.cson"
-gather_formation_units = (options) ->
-  unit_hash = parse( read( resolve(__dirname, "services/formation-units.cson")))
-
-  # Build array.
-  units = []
-  for key of unit_hash
-    units.push unit_hash[key]   if options[key]?
-
-  # Alleviate possible array nesting with shallow flattening.
-  return flatten units, true
-
 #===============================================================================
 # Main - Top-Level Command-Line Interface
 #===============================================================================
@@ -117,14 +105,24 @@ if argv.length == 0 || argv[0] == "-h" || argv[0] == "help"
   usage "main"
 
 # Now, look for the specified sub-command.
-switch argv[0]
-  when "create"
-    options = parse_cli "create", argv[1..]
-    options.formation_units = gather_formation_units options
-    PC.create options
-  when "destroy"
-    options = parse_cli "destroy", argv[1..]
-    PC.destroy options
-  else
-    # When the command cannot be identified, display the help guide.
-    usage "main", "\nError: Command Not Found: #{argv[0]} \n"
+
+call ->
+  try
+    switch argv[0]
+      when "create_cluster"
+        options = parse_cli "create", argv[1..]
+        res = (yield PC.create_cluster options)
+        console.log res
+      when "delete_cluster"
+        options = parse_cli "destroy", argv[1..]
+        res = (yield PC.delete_cluster options)
+        console.log res
+      when "create_user"
+        options = parse_cli "destroy", argv[1..]
+        res = (yield PC.create_user options)
+        console.log res
+      else
+        # When the command cannot be identified, display the help guide.
+        usage "main", "\nError: Command Not Found: #{argv[0]} \n"
+  catch error
+    throw error
