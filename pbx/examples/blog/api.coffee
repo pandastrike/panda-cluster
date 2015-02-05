@@ -4,7 +4,7 @@ builder = new Builder "test"
 
 builder.define "cluster", template: "/cluster/:cluster_url"
 .create parent: "clusters"
-#.get()
+.get()
 #.put()
 .delete()
 

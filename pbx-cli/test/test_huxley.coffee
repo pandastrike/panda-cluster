@@ -28,7 +28,7 @@ amen.describe "Huxley API", (context) ->
     user = (yield pbx.create_user pandaconfig)
     {secret_token} = (JSON.parse user).user
 
-    console.log "*****secret token sent: ", secret_token
+    #console.log "*****secret token sent: ", secret_token
     assert.ok user
     assert.ok secret_token
 
@@ -43,13 +43,13 @@ amen.describe "Huxley API", (context) ->
       #cluster_url = JSON.parse cluster_url
       cluster_url = cluster_url.split('/')
       cluster_url = cluster_url[cluster_url.length - 1]
-      console.log "*****cluster created, cluster_url: ", cluster_url
+      #console.log "*****cluster created, cluster_url: ", cluster_url
       #console.log "*****typeof :", typeof cluster_url
 
 #      cluster_status =
 #        (yield pbx.get_cluster_status {cluster_url, secret_token, url})
 #
-#      console.log "*****cluster_status: ", cluster_status
+#      #console.log "*****cluster_status: ", cluster_status
 #      assert.ok cluster_status
 
       context.test "Delete a cluster", ->

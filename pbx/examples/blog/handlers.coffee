@@ -40,7 +40,7 @@ module.exports = async ->
         create_request.stack_name = cluster_name
         # FIXME: removed yield in clusters.create
         #res = (yield pandacluster.create create_request)
-        res = pandacluster.create create_request
+        #res = pandacluster.create create_request
         delete create_request.stack_name
         respond 201, cluster_url: url "cluster", {cluster_url}
       else
@@ -52,10 +52,9 @@ module.exports = async ->
     delete: async ({respond, match: {path: {cluster_url}}, request: {headers: {authorization}}}) ->
       console.log "***************gets to delete"
       console.log "***** all clusters: ", (yield clusters)
-      cluster = (yield clusters.get cluster_url)
+      cluster = (yield clusters).get cluster_url
       console.log "*****cluster retrieved during delete: ", cluster
-      console.log "*****cluster url in delete: ", cluster_url
-      {email} = cluster
+      {email} = (yield cluster)
       user = yield users.get email
       console.log "*****user retrieved during delete: ", user
       # FIXME: validate secret token
@@ -72,8 +71,10 @@ module.exports = async ->
       else
         respond 401, "invalid email or token"
 
-    get_status: async ({respond, match: {path: {cluster_url}}, secret_token}) ->
-      cluster = yield clusters.get cluster_url
+    get: async ({respond, match: {path: {cluster_url}}, request: {headers: {authorization}}}) ->
+      clusters = (yield clusters)
+      cluster = (yield clusters.get cluster_url)
+      console.log "*****get cluster: ", cluster
       {email} = cluster
       user = yield users.get email
       # FIXME: validate secret token

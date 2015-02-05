@@ -24,7 +24,7 @@ module.exports =
     api = (yield discover url)
     cluster = (api.cluster cluster_url)
     {response} =
-      (yield cluster.get_status())
+      (yield cluster.get())
     data = (yield response)
 
   # FIXME: filter out secret keys in response
