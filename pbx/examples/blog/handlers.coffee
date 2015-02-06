@@ -50,12 +50,12 @@ module.exports = async ->
 
     # FIXME: pass in secret token in auth header
     delete: async ({respond, match: {path: {cluster_url}}, request: {headers: {authorization}}}) ->
-      console.log "***************gets to delete"
       console.log "***** all clusters: ", (yield clusters)
-      cluster = (yield clusters).get cluster_url
+      cluster = yield clusters.get cluster_url
       console.log "*****cluster retrieved during delete: ", cluster
       {email} = (yield cluster)
       user = yield users.get email
+      #user = yield users.get "peterlongnguyen@gmail.com"
       console.log "*****user retrieved during delete: ", user
       # FIXME: validate secret token
       #if user && secret_token == user.secret_token
