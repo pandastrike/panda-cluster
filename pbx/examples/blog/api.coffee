@@ -22,18 +22,6 @@ builder.define "user", template: "/users/:email"
 .get()
 
 
-#builder.define "blog"
-#.create parent: "blogs"
-#.get()
-#.put()
-#.delete()
-#
-#builder.define "post", template: "/blog/:key/:index"
-#.create parent: "blog"
-#.get()
-#.put()
-#.delete()
-
 builder.reflect()
 
 module.exports = builder.api

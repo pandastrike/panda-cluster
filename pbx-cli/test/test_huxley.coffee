@@ -34,27 +34,23 @@ amen.describe "Huxley API", (context) ->
 
     context.test "Create a cluster", ->
 
-      cluster_url =
+      location =
         (yield pbx.create_cluster {cluster_name, email, secret_token, url, key_pair, public_keys})
 
-      #console.log "*****cluster created, cluster_url: ", cluster_url
+      cluster_url = location
       assert.ok cluster_url
 
-      #cluster_url = JSON.parse cluster_url
-      cluster_url = cluster_url.split('/')
-      cluster_url = cluster_url[cluster_url.length - 1]
-      #console.log "*****cluster created, cluster_url: ", cluster_url
-      #console.log "*****typeof :", typeof cluster_url
+      console.log "*****cluster created, cluster_url: ", cluster_url
 
-#      cluster_status =
-#        (yield pbx.get_cluster_status {cluster_url, secret_token, url})
-#
-#      #console.log "*****cluster_status: ", cluster_status
-#      assert.ok cluster_status
+      cluster_status =
+        (yield pbx.get_cluster_status {cluster_url, secret_token, url})
+
+      console.log "*****cluster_status: ", cluster_status
+      assert.ok cluster_status
 
       context.test "Delete a cluster", ->
         url = pandaconfig.url
 
-        cluster = (yield pbx.delete_cluster {cluster_url, secret_token, url})
+        response = (yield pbx.delete_cluster {cluster_url, secret_token, url})
 
         console.log "*****results from delete cluster test: ", (yield cluster)

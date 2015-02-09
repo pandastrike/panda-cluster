@@ -182,7 +182,6 @@ build_template = async (options) ->
     # Defaults to creating a service file with drive /dev/xvdb.
     #prepare_ephemeral_drive_template options.ephemeral_drive
     #prepare_docker_mount_template options.ephemeral_drive
-
     
     unless !options.formation_units || options.formation_units == []
       for x in options.formation_units
@@ -585,12 +584,15 @@ customize_cluster = async (options, creds) ->
 
 # Destroy a CoreOS cluster using the AWS account information that has been gathered.
 destroy_cluster = async (params, creds) ->
+  console.log "in destroy cluster"
   AWS.config = set_aws_creds creds
   cf = new AWS.CloudFormation()
   delete_stack = lift_object cf, cf.deleteStack
 
   try
+    console.log "right before running delete"
     data = yield delete_stack params
+    console.log "just ran delete cluster"
     return data
 
   catch err
@@ -650,8 +652,8 @@ module.exports =
       data =
         destroy_cluster: yield destroy_cluster( params, credentials)
 
-      return build_success "The targeted cluster has been destroyed.  All related resources have been released.",
-      data, 200
+      console.log "*****pandacluster delete just about finished, returning success object"
+      return build_success "The targeted cluster has been destroyed.  All related resources have been released.", data, 200
 
     catch error
       return build_error "Apologies. The targeted cluster has not been destroyed.", error

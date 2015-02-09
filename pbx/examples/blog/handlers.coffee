@@ -4,7 +4,12 @@ async = (require "when/generator").lift
 
 pandacluster = require "../../../src/pandacluster"
 
-make_key = -> (require "key-forge").randomKey 16
+_  = require "underscore"
+
+deep_copy = (object) ->
+  _.map(object, _.clone)[0]
+
+make_key = -> (require "key-forge").randomKey 16, "base64url"
 
 adapter = Memory.Adapter.make()
 
@@ -25,24 +30,27 @@ module.exports = async ->
 
     create: async ({respond, url, data}) ->
       data = (yield data)
-      console.log "*****data in create cluster: ", data
       cluster_url = make_key()
       {cluster_name, email, secret_token, key_pair, public_keys} = data
-      console.log "*****the cluster name: ", cluster_name
       user = yield users.get email
+
       if user && data.secret_token == user.secret_token
         cluster_entry =
           email: email
           url: cluster_url
           name: cluster_name
         cluster_res = yield clusters.put cluster_url, cluster_entry
-        create_request = user
+
+        create_request = deep_copy user
+        #create_request = user
         create_request.stack_name = cluster_name
+        console.log "*****original object: ", user
+        console.log "*****cloned object: ", create_request
+
         # FIXME: removed yield in clusters.create
-        #res = (yield pandacluster.create create_request)
         #res = pandacluster.create create_request
         delete create_request.stack_name
-        respond 201, cluster_url: url "cluster", {cluster_url}
+        respond 201, "", {location: (url "cluster", {cluster_url})}
       else
         respond 401, "invalid email or token"
 
@@ -50,24 +58,20 @@ module.exports = async ->
 
     # FIXME: pass in secret token in auth header
     delete: async ({respond, match: {path: {cluster_url}}, request: {headers: {authorization}}}) ->
-      console.log "***** all clusters: ", (yield clusters)
       cluster = yield clusters.get cluster_url
-      console.log "*****cluster retrieved during delete: ", cluster
-      {email} = (yield cluster)
+      {email, name} = cluster
       user = yield users.get email
-      #user = yield users.get "peterlongnguyen@gmail.com"
-      console.log "*****user retrieved during delete: ", user
       # FIXME: validate secret token
       #if user && secret_token == user.secret_token
       if user
         request_data =
           aws: user.aws
-          stack_name: cluster.name
+          stack_name: name
         clusters.delete cluster_url
         # FIXME: removed yield in clusters.delete
         pandacluster.destroy request_data
-        console.log "*****delete request data: ", request_data
-        respond 200, "", {"x-cluster-url": cluster_url}
+        console.log "*****just finished deleting in handlers"
+        respond 200, {cluster_status}
       else
         respond 401, "invalid email or token"
 
@@ -80,11 +84,9 @@ module.exports = async ->
       # FIXME: validate secret token
       #if user && secret_token == user.secret_token
       if user
-        cluster = yield clusters.get cluster_url
         request_data =
           aws: user.aws
           stack_name: cluster.name
-        clusters.delete cluster_url
         cluster_status = yield pandacluster.get_cluster_status request_data
         respond 200, {cluster_status}
       else

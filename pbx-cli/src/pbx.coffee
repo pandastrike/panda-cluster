@@ -9,8 +9,8 @@ module.exports =
 
     api = (yield discover url)
     clusters = (api.clusters)
-    {data} = (yield clusters.create {cluster_name, email, secret_token})
-    data = (yield data)
+    {response: {headers: {location}}}  = (yield clusters.create {cluster_name, email, secret_token})
+    location
 
 #  get_cluster_status: async ({cluster_name, email, secret_token, url}) ->
 #
@@ -23,9 +23,8 @@ module.exports =
 
     api = (yield discover url)
     cluster = (api.cluster cluster_url)
-    {response} =
-      (yield cluster.get())
-    data = (yield response)
+    {data} = (yield cluster.get())
+    data = (yield data)
 
   # FIXME: filter out secret keys in response
   create_user: async ({aws, email, url, key_pair, public_keys}) ->
@@ -38,9 +37,8 @@ module.exports =
   delete_cluster: async ({cluster_url, secret_token, url}) ->
 
     api = (yield discover url)
+    console.log "*****pbx controller cluster_url: ", cluster_url
     cluster = (api.cluster cluster_url)
-    {response} =
-      (yield cluster.delete
-        headers:
-          Authorization: secret_token)
-    data = (yield response)
+    result = (yield cluster.delete headers: Authorization: secret_token)
+    console.log "*****result of delete: ", result
+    console.log "*****end of pbx.coffee delete, doesn't print out"

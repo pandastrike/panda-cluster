@@ -6,7 +6,6 @@
   "directories": {
     "test": "test"
   },
-
   "scripts": {
     "prepublish": "coffee --nodejs --harmony -o ./ -c src/*.*coffee",
     "watch": "coffee --nodejs --harmony -o lib/ -cw src/*.*coffee",
@@ -24,10 +23,11 @@
     "pirate": "git://github.com/pandastrike/pirate.git#57d404"
   },
   "dependencies": {
-    "jsck": "^0.2.1",
     "fairmont": "^0.8.2",
+    "jsck": "^0.2.1",
     "routington": "^1.0.2",
     "shred": "^1.1.0-alpha-03",
+    "underscore": "^1.7.0",
     "when": "^3.6.3"
   }
 }
