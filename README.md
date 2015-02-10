@@ -93,8 +93,8 @@ private_hosted_zone: "myapp.cluster"  # This is only visible inside the cluster 
 
 # **WARNING** - These affect the cost of your cluster.  See AWS Documentation for pricing.
 instance_type: "m1.medium"
-cluster_size: "3"
-spot_price: "0.009"   # Tell panda-cluster to use Spot Instances at this hourly rate.
+cluster_size: 3
+spot_price: 0.009   # Tell panda-cluster to use Spot Instances at this hourly rate.
                       # Omit this line to use On-Demand Instances.
 #=============================
 

@@ -385,7 +385,7 @@ build_template = async (options, creds) ->
     resources.CoreOSServerLaunchConfig.Properties.AssociatePublicIpAddress = "true"
     # Also give it a Spot Price if the user seeks to keep the cost down.
     if options.spot_price?
-      resources.CoreOSServerLaunchConfig.Properties.SpotPrice = options.spot_price
+      resources.CoreOSServerLaunchConfig.Properties.SpotPrice = String(options.spot_price)
 
     # Modify the object specifying the cluster's auto-scaling group.  Associate with the VPC.
     resources.CoreOSServerAutoScale["DependsOn"] = "ClusterGateway"
@@ -482,6 +482,8 @@ launch_stack = async (options, creds) ->
     # Parameters is a map of key/values custom defined for this stack by the
     # template file.  We will now fill out the map as specified or with defaults.
     #---------------------------------------------------------------------------
+    String(options.cluster_size) if options.cluster_size?
+
     params.Parameters = [
 
       { # InstanceType

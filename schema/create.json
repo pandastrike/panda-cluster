@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Panda-Cluster Create",
+  "description": "This is the configuation object panda-cluster needs to create a CoreOS cluster and deploy services, all to user specifications.",
+  "type": "object",
+  "properties": {
+    "aws": {
+      "description": "Describes the user's AWS credentials to gain API access.",
+      "type": "object",
+      "properties": {
+        "id":     {"type": "string"},
+        "key":    {"type": "string"},
+        "region": {
+          "type": "string",
+          "enum": ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2", "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1", "us-west-2"]
+        },
+      },
+      "additionalProperties": false,
+      "required": ["id", "key", "region"]
+    },
+    "public_keys": {
+      "description": "A list of public keys that get placed into the cluster, granting access anyone with a corresponding private key.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "stack_name": {
+      "description": "The name of request sent to AWS CloudFormation. AWS requires this to be unqiue among names in your account.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "key_pair": {
+      "description": "This is the name of a public-private key-pair that is assocated with your AWS account.  The public key will be placed into the cluster. You are ostensibly in possession of the private key and will therefore have cluster access via SSH.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "channel": {
+      "description": "This describes one of the three release versions of CoreOS.  \"stable\" is the most tested, followed by \"beta\", and \"alpha\" is pretty experimental.",
+      "type": "string",
+      "enum": ["alpha", "beta", "stable"]
+    },
+    "hostname": {
+      "description": "This is the public hostname for the \"head\" machine of the cluster.  You must own the host domain.",
+      "type": "string"
+    },
+    "region": {
+      "description": "This allows you to override the region specified in the AWS credentials section.",
+      "type": "string",
+      "enum": ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2", "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1", "us-west-2"]
+    },
+    "private_hosted_zone": {
+      "description": "This is a host domain that is only visible privately on the cluster, so it can be arbitrary while conforming to a \"foo.bar\" structure.  It is itended for service addressing.",
+      "type": "string"
+    },
+    "instance_type": {
+      "description": "This specifies the type of EC2 instance is used to build the cluster.  Every machine is the of the same type.",
+      "type": "string",
+      "enum": ["c1.medium", "c1.xlarge", "c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "m1.medium", "m1.large", "m1.xlarge", "m2.xlarge", "m2.2xlarge", "m2.4xlarge", "m3.large", "m3.xlarge", "m3.2xlarge"]
+    },
+    "cluster_size": {
+      "description": "This specifies the number of EC2 instances in your cluster.",
+      "type": "integer",
+      "minimum": 3,
+      "maximum": 12,
+      "exclusiveMinimum": false,
+      "exclusiveMaximum": false
+    },
+    "virtualization": {
+      "description": "This specifies which form of virtualization you would prefer your instances use.",
+      "type": "string",
+      "enum": ["pv", "hvm"]
+    },
+    "spot_price": {
+      "description": "This tells panda-cluster to use Spot Instances and to set the maximum price at this rate (dollars/hour).",
+      "type": "number",
+      "minimum": 0,
+      "exclusiveMinimum": true
+    },
+    "tags": {
+      "description:": "These tags are arbitrary descriptions associated with your EC2 instances and are viewable in the console.",
+      "type": "array",
+      "item": {
+        "type": "object"
+        "properties": {
+          "Key": {
+            "description": "Describes a an arbitrary category for your tag.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "Value": {
+            "description": "Describes a an arbitrary value that goes into this category for your tag.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "additionalProperties": false,
+        "required": ["Key", "Value"]
+      }
+    },
+
+  },
+  "additionalProperties": false,
+  "required": ["aws", "stack_name", "key_pair"]
+}

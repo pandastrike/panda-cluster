@@ -27,11 +27,6 @@ create:[
     flag: "-k"
   }
   {
-    name: "mount_docker"
-    flag: "-m"
-    allowed_values: ["true"]
-  }
-  {
     name: "stack_name"
     flag: "-n"
   }
