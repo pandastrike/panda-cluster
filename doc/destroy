@@ -1,5 +1,5 @@
 -----------------------------------------------------------------
-Usage: pandacluster destroy -n CLUSTER_NAME
+Usage: panda-cluster destroy -n CLUSTER_NAME
 -----------------------------------------------------------------
 Follow any command with "help" for more information.
 

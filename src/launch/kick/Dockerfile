@@ -17,9 +17,8 @@ RUN pacman -S --noconfirm git openssh wget vim tmux
 # Install Node v0.11+ and CoffeeScript
 #======================================
 # We need the powerful concurrency technologies that are only available in the
-# currently unstable Node v0.11 and un-released "master" of CoffeeScript. We
-# will have to jump through a couple extra hoops until both are released via
-# their package managers.
+# currently unstable Node v0.11. We will have to jump through a couple extra hoops
+# until it's released via its package manager.
 
 # Install nvm from source.
 RUN git clone https://github.com/creationix/nvm.git ~/.nvm && \
@@ -30,9 +29,9 @@ git checkout `git describe --abbrev=0 --tags`
 # command, followed by "nvm use v0.11" (starting after this "nvm install" command, of course).
 RUN source ~/.nvm/nvm.sh && nvm install 0.11
 
-# Now install the un-relased "master" branch of CoffeeScript.
+# Now install CoffeeScript.
 RUN source ~/.nvm/nvm.sh && nvm use 0.11 && \
-npm install -g jashkenas/coffee-script
+npm install -g coffee-script
 #================================
 
 # Pull the Kick repo from GitHub.

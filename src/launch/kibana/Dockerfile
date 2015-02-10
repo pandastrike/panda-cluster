@@ -8,9 +8,9 @@ MAINTAINER David Harper (david@pandastrike.com)
 
 RUN pacman -Syu --noconfirm
 RUN pacman-db-upgrade
-RUN pacman -S --noconfirm jre7-openjdk-headless wget
+RUN pacman -S --noconfirm jre7-openjdk-headless wget vim tmux
 
-# Install Elasticsearch 1.4.2
+# Install Kibana 4 Beta 3
 RUN mkdir downloads && cd downloads && \
 wget https://download.elasticsearch.org/kibana/kibana/kibana-4.0.0-beta3.tar.gz && \
 tar -xvf kibana-4.0.0-beta3.tar.gz && \

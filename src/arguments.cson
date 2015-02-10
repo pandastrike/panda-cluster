@@ -11,7 +11,7 @@ create:[
     allowed_values: ["alpha", "beta", "stable"]
   }
   {
-    name: "dns"
+    name: "private_hosted_zone"
     flag: "-d"
   }
   {

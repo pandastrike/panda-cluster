@@ -25,10 +25,9 @@ main.coffee (?)
 
 Contains the --help text provided for the CLI commands as used by `src/cli.coffee`.
 
-1. build_template
-2. create
-3. destroy
-4. main
+1. create
+2. destroy
+3. main
 
 ## src
 ------------------

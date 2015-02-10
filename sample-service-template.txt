@@ -1,7 +1,6 @@
 #===============================================================================
-# panda-cluster - Service Template
+# panda-cluster - Service Template Example
 #===============================================================================
-# This unit spins up a CoreOS service.
 
 [Unit]
 Description=Spin Up Service
@@ -41,9 +40,10 @@ ExecStartPre=/usr/bin/curl -XPOST {{{kick_address}}} -d '\
   "port": "{{{port}}}",  \
   "type": "{{{type}}}"'
 
-ExecStart=/usr/bin/docker run --name {{{container_name}}} -p {{{port}}}:9200 \
+ExecStart=/usr/bin/docker run --name {{{container_name}}} -p {{{port}}}:5601 \
   {{{image_name}}} /bin/bash -c \
-  'cd elasticsearch-1.4.2/bin && ./elasticsearch'
+  'List any bash commands here that need to happen when the container starts. \
+  They must be concatenated into a single shell statement with "&&"'
 
 
 [Install]

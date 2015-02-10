@@ -9,7 +9,7 @@ MAINTAINER David Harper (david@pandastrike.com)
 
 RUN pacman -Syu --noconfirm
 RUN pacman-db-upgrade
-RUN pacman -S --noconfirm jre7-openjdk-headless wget
+RUN pacman -S --noconfirm jre7-openjdk-headless wget vim tmux
 
 # Install Elasticsearch 1.4.2
 RUN mkdir downloads && cd downloads && \

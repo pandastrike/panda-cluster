@@ -1,5 +1,5 @@
 -----------------------------------------------------------------
-Usage: pandacluster create [Options] -k KEY_PAIR -n CLUSTER_NAME
+Usage: panda-cluster create [Options] -k KEY_PAIR -n CLUSTER_NAME
 -----------------------------------------------------------------
 Follow any command with "help" for more information.
 

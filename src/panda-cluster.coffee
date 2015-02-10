@@ -14,7 +14,7 @@ https = require "https"
 {writeFileSync} = require "fs"
 
 # Awsome functional style tricks.
-{where} = require "underscore"
+{where, pluck, every} = require "underscore"
 
 # When Library
 {promise, lift} = require "when"
@@ -35,15 +35,28 @@ AWS = require "aws-sdk"
 #================================
 # Helper Functions
 #================================
-# Lift Node's async read/write functions.
-{read_file, write_file} = do ->
-  {readFile, writeFile} = liftAll(require "fs")
+# Create a list of objects, where the new objects are a subset of their original input.  "key" is
+# a simple string naming the target objects's *key* (cannot filter based on *value*).
+# "new_key" is optional and allows the objects to use a new string for its keys.
+subset = (map_list, key, new_key) ->
+  result = []
+  values = pluck(map_list, key)
+  new_key ||= key
 
-  read_file: async (path) ->
-    (yield readFile path, "utf-8").toString()
+  for value in values
+    temp = {}
+    temp[new_key] = value
+    result.push temp
 
-  write_file: (path, content) ->
-    writeFile path, content, "utf-8"
+  return result
+
+
+# Enforces "fully qualified" form of hostnames.  Idompotent.
+fully_qualified = (name) ->
+  if name[name.length - 1] == "."
+    return name
+  else
+    return name + "."
 
 # Render underscores and dashes as whitespace.
 plain_text = (string) ->
@@ -64,6 +77,17 @@ build_success = (message, data) ->
     status: "success"
     details: data       if data?
   }
+
+
+# Lift Node's async read/write functions.
+{read_file, write_file} = do ->
+  {readFile, writeFile} = liftAll(require "fs")
+
+  read_file: async (path) ->
+    (yield readFile path, "utf-8").toString()
+
+  write_file: (path, content) ->
+    writeFile path, content, "utf-8"
 
 # Create a version of ShellJS's "exec" command with built-in error handling.  In
 # PandaCluster, we regularly use "exec" with SSH commands and other longish-running
@@ -280,7 +304,7 @@ build_template = async (options, creds) ->
             Value: options.stack_name
           }]
 
-    # Add an object speicfying a Route for public addresses (through the Internet Gateway).
+    # Add an object specifying a Route for public addresses (through the Internet Gateway).
     resources["PublicRoute"] =
       Type: "AWS::EC2::Route"
       DependsOn: "ClusterGateway"
@@ -412,12 +436,16 @@ build_template = async (options, creds) ->
 
 # Configure the AWS object for account access.
 set_aws_creds = (creds) ->
-  return {
-    accessKeyId: creds.id
-    secretAccessKey: creds.key
-    region: creds.region
-    sslEnabled: true
-  }
+  try
+    return {
+      accessKeyId: creds.id
+      secretAccessKey: creds.key
+      region: creds.region
+      sslEnabled: true
+    }
+  catch error
+    console.log "AWS Credential Issue.", error
+    return build_error "Unable to configure AWS.config object", error
 
 
 # Confirm that the named SSH key exists in your AWS account.
@@ -494,7 +522,7 @@ launch_stack = async (options, creds) ->
 
 
 # This function checks the specified AWS stack to see if its formation is complete.
-# It returns either true or false, and throws an exception if an AWS error is reported.
+# It returns either true or false, and throws an exception if an AWS error is reported. Used with polling.
 get_formation_status = async (options, creds) ->
   AWS.config = set_aws_creds creds
   cf = new AWS.CloudFormation()
@@ -517,7 +545,8 @@ get_formation_status = async (options, creds) ->
   catch err
     return build_error "Unable to access AWS CloudFormation.", err
 
-
+# Retrieve the subnet ID of the subnet we just created.  We can use the stack name
+# to query AWS for the physical ID.
 get_cluster_subnet = async (options, creds) ->
   AWS.config = set_aws_creds creds
   cf = new AWS.CloudFormation()
@@ -533,7 +562,31 @@ get_cluster_subnet = async (options, creds) ->
   catch error
     build_error "Unable to access AWS CloudFormation.", error
 
+# Get the ID of the VPC we just created for the cluster.  In the CloudFormation
+# template, we specified a VPC that is tagged with the cluster's StackName.
+get_cluster_vpc_id = async (options, creds) ->
+  AWS.config = set_aws_creds creds
+  ec2 = new AWS.EC2()
+  describe_vpcs = lift_object ec2, ec2.describeVpcs
 
+  params =
+    Filters: [
+      Name: "tag:Name"
+      Values: [
+        options.stack_name
+      ]
+    ]
+
+  try
+    data = yield describe_vpcs params
+    # Dig the VPC ID out of the data object and return it.
+    return data.Vpcs[0].VpcId
+
+  catch error
+    return build_error "Unable to access AWS EC2.", error
+
+# This function checks to see if *all* spot instances within a spot-request are online
+# and ready.  Otherwise it returns false.  Used with polling.
 get_spot_status = async (options, creds) ->
   AWS.config = set_aws_creds creds
   ec2 = new AWS.EC2()
@@ -549,57 +602,27 @@ get_spot_status = async (options, creds) ->
 
   try
     data = yield describe_spot params
+    state = pluck data.SpotInstanceRequests, "State"
+    is_active = (state) -> state == "active"
 
-    if data.SpotInstanceRequests.length == 0
+    if state.length == 0
       return false # Request has yet to be created.
-    else if data.SpotInstanceRequests[0].State == "open"
-      return false # Request is pending.
-    else if data.SpotInstanceRequests[0].State == "active"
+    else if every( state, is_active)
+      # *All* spot i nstances are online and ready.
       return {
-        result: "active"
-        instance_id: data.SpotInstanceRequests[0].InstanceId
+        result: build_success "Spot Request Fulfilled.", data
+        instances: subset(data.SpotInstanceRequests, "InstanceId", "id")
       }
     else
-      throw build_error "Spot Request failed.", data.SpotInstanceRequests[0].State
-  catch error
-    console.log error
-    return build_error "Unable to access AWS EC2.", error
-
-#-------------------------
-# Cluster Customization
-#-------------------------
-
-#----------------------------
-# General DNS Fucntions
-#----------------------------
-# Return the public facing IP address of a single machine from the cluster we just
-# created.
-get_spot_ip_address = async (options, creds) ->
-  AWS.config = set_aws_creds creds
-  ec2 = new AWS.EC2()
-  describe_instances = lift_object ec2, ec2.describeInstances
-
-  params =
-    Filters: [
-      {
-        Name: "instance-id"
-        Values: [options.instance_id]
-      }
-    ]
-
-  try
-    data = yield describe_instances params
-    return {
-      ip_address: data.Reservations[0].Instances[0].PublicIpAddress
-      private_ip_address: data.Reservations[0].Instances[0].PrivateIpAddress
-    }
+      return false # Request is pending.
 
   catch error
     console.log error
     return build_error "Unable to access AWS EC2.", error
 
-
-get_on_demand_ip_address = async (options, creds) ->
+# When more expensive on-demand instances are used, they start right away with the CloudFormation stack.
+# We just need to query AWS with the stack name tags and pull the IDs of active instances.
+get_on_demand_instances = async (options, creds) ->
   AWS.config = set_aws_creds creds
   ec2 = new AWS.EC2()
   describe_instances = lift_object ec2, ec2.describeInstances
@@ -622,9 +645,30 @@ get_on_demand_ip_address = async (options, creds) ->
 
   try
     data = yield describe_instances params
+    return subset(data.Reservations[0].Instances, "InstanceId", "id")
+  catch error
+    console.log error
+    return build_error "Unable to access AWS EC2.", error
+
+# Return the public and private facing IP address of a single instance.
+get_ip_address = async (instance_id, creds) ->
+  AWS.config = set_aws_creds creds
+  ec2 = new AWS.EC2()
+  describe_instances = lift_object ec2, ec2.describeInstances
+
+  params =
+    Filters: [
+      {
+        Name: "instance-id"
+        Values: [instance_id]
+      }
+    ]
+
+  try
+    data = yield describe_instances params
     return {
-      ip_address: data.Reservations[0].Instances[0].PublicIpAddress
-      private_ip_address: data.Reservations[0].Instances[0].PrivateIpAddress
+      public_ip: data.Reservations[0].Instances[0].PublicIpAddress
+      private_ip: data.Reservations[0].Instances[0].PrivateIpAddress
     }
 
   catch error
@@ -632,9 +676,17 @@ get_on_demand_ip_address = async (options, creds) ->
     return build_error "Unable to access AWS EC2.", error
 
 
+
+#-------------------------
+# Cluster Customization
+#-------------------------
+
+#----------------------------
+# General DNS Fucntions
+#----------------------------
 # Given a URL of many possible formats, return the root domain.
 # https://awesome.example.com/test/42#?=What+is+the+answer  =>  example.com.
-get_root_domain = (url) ->
+get_hosted_zone_name = (url) ->
   try
     # Find and remove protocol (http, ftp, etc.), if present, and get domain
 
@@ -665,7 +717,7 @@ get_root_domain = (url) ->
 # Get the AWS HostedZoneID for the specified domain.
 get_hosted_zone_id = async (hostname, creds) ->
   try
-    root_domain = get_root_domain hostname
+    hosted_zone = get_hosted_zone_name hostname
     AWS.config = set_aws_creds creds
     r53 = new AWS.Route53()
     list_zones = lift_object r53, r53.listHostedZones
@@ -673,7 +725,10 @@ get_hosted_zone_id = async (hostname, creds) ->
     data = yield list_zones {}
 
     # Dig the ID out of an array, holding an object, holding the string we need.
-    return where( data.HostedZones, {Name:root_domain})[0].Id
+    return {
+      zone_name: hosted_zone
+      zone_id: where( data.HostedZones, {Name:hosted_zone})[0].Id
+    }
 
   catch error
     return build_error "Unable to access AWS Route 53.", error
@@ -693,9 +748,10 @@ get_dns_record = async (hostname, zone_id, creds) ->
     record = where data.ResourceRecordSets, {Name:hostname}
 
     if record.length == 0
-      record = where data.ResourceRecordSets, {Name: "#{hostname}."}
-      if record.length == 0
-        return null
+      return {
+        current_ip_address: null
+        current_type: null
+      }
 
     return {
       current_ip_address: record[0].ResourceRecords[0].Value
@@ -765,8 +821,6 @@ add_dns_record = async (options, creds) ->
     # The params object contains "Changes", an array of actions to take on the DNS
     # records.  Here we delete the old record and add the new IP address.
 
-    # TODO: When we establish an Elastic Load Balancer solution, we
-    # will need to the "AliasTarget" sub-object here.
     params =
       HostedZoneId: options.zone_id
       ChangeBatch:
@@ -797,12 +851,13 @@ add_dns_record = async (options, creds) ->
     }
 
   catch error
+    console.log error
     return build_error "Unable to assign the IP address to the designated hostname.", error
 
 
-# This function checks the specified DNS record to see if its "INSYC", done updating.
+# This function checks the specified DNS record to see if it's "INSYC", done updating.
 # It returns either true or false, and throws an exception if an AWS error is reported.
-get_dns_change_status = async (change_id, creds) ->
+get_record_change_status = async (change_id, creds) ->
   AWS.config = set_aws_creds creds
   r53 = new AWS.Route53()
   get_change = lift_object r53, r53.getChange
@@ -824,29 +879,30 @@ get_dns_change_status = async (change_id, creds) ->
 set_hostname = async (options, creds) ->
   try
     # We need to determine if the requested hostname is currently assigned in a DNS record.
-    zone_id = yield get_hosted_zone_id( options.hostname, creds)
-    {current_ip_address, current_type} = yield get_dns_record( options.hostname, zone_id, creds)
+    {current_ip_address, current_type} = yield get_dns_record( options.hostname, options.public_dns_id, creds)
 
     if current_ip_address?
+      console.log "Changing Current Record."
       # There is already a record.  Change it.
       params =
         hostname: options.hostname
-        zone_id: zone_id
+        zone_id: options.public_dns_id
         current_ip_address: current_ip_address
         current_type: current_type
         type: "A"
-        ip_address: options.ip_address
+        ip_address: options.instances[0].public_ip
 
       return yield change_dns_record params, creds
     else
+      console.log "Adding New Record."
       # No existing record is associated with this hostname.  Create one.
       params =
         hostname: options.hostname
-        zone_id: zone_id
+        zone_id: options.public_dns_id
         type: "A"
-        ip_address: options.ip_address
+        ip_address: options.instances[0].public_ip
 
-      return yield add_dsn_record params, creds
+      return yield add_dns_record params, creds
 
   catch error
     console.log error
@@ -854,51 +910,19 @@ set_hostname = async (options, creds) ->
 
 
 
-
-
-#------------------------
-# Private DNS Functions
-#------------------------
-
-# Get the ID of the VPC we just created for the cluster.  In the CloudFormation
-# template, we specified a VPC that is tagged with the cluster's StackName.
-get_cluster_vpc_id = async (options, creds) ->
-  AWS.config = set_aws_creds creds
-  ec2 = new AWS.EC2()
-  describe_vpcs = lift_object ec2, ec2.describeVpcs
-
-  params =
-    Filters: [
-      Name: "tag:Name"
-      Values: [
-        options.stack_name
-      ]
-    ]
-
-  try
-    data = yield describe_vpcs params
-    # Dig the VPC ID out of the data object and return it.
-    return data.Vpcs[0].VpcId
-
-  catch error
-    return build_error "Unable to access AWS EC2.", error
-
-
-
 # Using Private DNS from Route 53, we need to give the cluster a private DNS
 # so services may be referenced with human-friendly names.
-launch_private_dns = async (options, creds) ->
+create_private_hosted_zone = async (options, creds) ->
   try
-    vpc_id = yield get_cluster_vpc_id options, creds
     AWS.config = set_aws_creds creds
     r53 = new AWS.Route53()
     create_zone = lift_object r53, r53.createHostedZone
 
     params =
-      CallerReference: "caller_rference_#{options.dns}_#{new Date().getTime()}"
-      Name: options.dns
+      CallerReference: "caller_rference_#{options.private_hosted_zone}_#{new Date().getTime()}"
+      Name: options.private_hosted_zone
       VPC:
-        VPCId: vpc_id
+        VPCId: options.vpc_id
         VPCRegion: creds.region
 
     data = yield create_zone params
@@ -914,7 +938,7 @@ launch_private_dns = async (options, creds) ->
 
 # This function checks the specified Hosted Zone to see if its "INSYC", done updating.
 # It returns either true or false, and throws an exception if an AWS error is reported.
-get_private_dns_status = async (change_id, creds) ->
+get_hosted_zone_status = async (change_id, creds) ->
     AWS.config = set_aws_creds creds
     r53 = new AWS.Route53()
     get_hosted_zone = lift_object r53, r53.getHostedZone
@@ -939,83 +963,95 @@ get_private_dns_status = async (change_id, creds) ->
 
 # Prepare the cluster to be self-sufficient by installing directory called "launch".
 # "launch" acts as a repository where each service will have its own sub-directory
-# containing a Dockerfile, *.service file, and anything else it needs.
+# containing a Dockerfile, *.service file, and anything else it needs.  Because we
+# don't know which machine will host the service, copies of the launch directory need
+# to be on every machine.
 prepare_launch_directory = async (options) ->
+  output = []
   try
-    command =
-      "ssh -o \"StrictHostKeyChecking no\" core@#{options.hostname} << EOF\n" +
-      "mkdir launch\n" +
-      "mkdir launch/kick\n" +
-      "EOF"
+    for address in pluck( options.instances, "public_ip")
+      command =
+        "scp -o \"StrictHostKeyChecking no\" -o \"UserKnownHostsFile=/dev/null\" " +
+        "-r #{__dirname}/launch/ " +
+        "core@#{address}:/home/core/."
 
-    output = yield execute command
-    return build_success "The Launch Repository is ready.", output
+      output.push yield execute command
 
+    return build_success "The Launch Repositories are ready.", output
   catch error
     return build_error "Unable to install the Launch Repository.", error
 
 
-# Prepare the cluster to be self-sufficient by installing the Kick API server. (short for sidekick).
-# It's a primative, meta API server that allows the cluster to alter itself independently
-# of a remote agent.  The Kick server is Dockerized and contains the library of all Huxley mixins.
+# Prepare the cluster to be self-sufficient by launching the Kick API server on the "main"
+# cluster machine.  This is short for "sidekick service"; a primative, meta API server that allows
+# the cluster to act with some autonomy when prompted by a remote agent.  The Kick server is Dockerized.
 prepare_kick = async (options, creds) ->
   output = {}
   try
-    # Place a copy of the kick-server Dockerfile on the cluster.
-    command =
-      "scp -o \"StrictHostKeyChecking no\" " +
-      "#{__dirname}/launch/kick/Dockerfile " +
-      "core@#{options.hostname}:/home/core/launch/kick/."
-
-    output.dockerfile = yield execute command
-
     # Add the kick server to the cluster's private DNS records.
     params =
-      hostname: "kick.#{options.dns}"
-      zone_id: options.dns_zone_id
+      hostname: "kick.#{options.private_hosted_zone}"
+      zone_id: options.private_dns_id
       type: "A"
-      ip_address: options.private_ip_address
+      ip_address: options.instances[0].private_ip[0]
 
-    {result, change_id} = yield add_dns_record params, creds
+    console.log "Adding Kick Server to DNS Record"
+    {result, change_id} = yield add_dns_record( params, creds)
     output.register_kick = result
-    output.detect_registration = yield poll_until_true get_dns_change_status,
+    output.detect_registration = yield poll_until_true get_record_change_status,
       change_id, creds, 5000, "Unable to detect Kick registration.", 25
+    console.log "DNS Record Synchronized."
 
     console.log "Building Kick Container...  This will take a moment."
     # Build the Kick's Docker container from its Dockerfile.
     command =
-      "ssh -o \"StrictHostKeyChecking no\" core@#{options.hostname} << EOF\n" +
-      "cd launch/kick\n" +
-      "docker build --tag=\"kick_image\" .\n" +
+      #"ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
+      "ssh -A -o \"StrictHostKeyChecking no\"  -o \"UserKnownHostsFile=/dev/null\" " +
+      "core@#{options.hostname} << EOF\n" +
+      "docker pull pandastrike/pc_kick \n" +
       "EOF"
 
     output.build_kick = yield execute command
 
     # Activate the kick server and pass in the user's AWS credentials.  We need to get the
     # credentials *into* the kick server at runtime and obey CSON formatting rules.  That's
-    # why we rely on a runtime `sed` command to make it happen and not store your creds anywhere else.
-    options.dns_zone_id = options.dns_zone_id.split("/")[2]
+    # why we rely on a runtime `sed` command to make it happen while avoiding placing the user
+    # credentials in multiple places.  They exist only in the running container and are *NOT*
+    # stored in the image.
+    public_dns_id = options.public_dns_id.split("/")[2]
+    private_dns_id = options.private_dns_id.split("/")[2]
 
     command =
-      "ssh -o \"StrictHostKeyChecking no\" core@#{options.hostname} << EOF\n" +
-      "docker run -d -p 2000:80 --name kick kick_image /bin/bash -c " +
+      "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
+      "core@#{options.hostname} << EOF\n" +
+      "docker run -d -p 2000:80 --name kick pandastrike/pc_kick /bin/bash -c " +
       "\"cd panda-cluster-kick && " +
 
-      "sed \"s/id_goes_here/#{creds.id}/g\" < kick.cson > temp && " +
+      "sed \"s/aws_id_goes_here/#{creds.id}/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
-      "sed \"s/key_goes_here/#{creds.key}/g\" < kick.cson > temp && " +
+      "sed \"s/aws_key_goes_here/#{creds.key}/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
-      "sed \"s/region_goes_here/#{creds.region}/g\" < kick.cson > temp && " +
+      "sed \"s/aws_region_goes_here/#{creds.region}/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
-      "sed \"s/zone_goes_here/#{options.dns_zone_id}/g\" < kick.cson > temp && " +
+      "sed \"s/public_zone_id_goes_here/#{public_dns_id}/g\" < kick.cson > temp && " +
+      "mv temp kick.cson && " +
+
+      "sed \"s/public_zone_name_goes_here/#{options.public_hosted_zone}/g\" < kick.cson > temp && " +
+      "mv temp kick.cson && " +
+
+      "sed \"s/private_zone_id_goes_here/#{private_dns_id}/g\" < kick.cson > temp && " +
+      "mv temp kick.cson && " +
+
+      "sed \"s/private_zone_name_goes_here/#{options.private_hosted_zone}/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
       "source ~/.nvm/nvm.sh && nvm use 0.11 && " +
-      "coffee --nodejs --harmony /panda-cluster-kick/kick.coffee\" \n" +
+      "coffee --nodejs --harmony kick.coffee\" \n" +
       "EOF"
+
     output.run_kick = yield execute command
     return build_success "The Kick Server is online.", output
 
@@ -1030,7 +1066,7 @@ launch_service_unit = async (name, hostname) ->
     name = dashed plain_text name
     # Place a copy of the customized unit file on the cluster.
     command =
-      "scp -o \"StrictHostKeyChecking no\" " +
+      "scp -o \"StrictHostKeyChecking no\" -o \"UserKnownHostsFile=/dev/null\" " +
       "-r #{__dirname}/launch/#{name} " +
       "core@#{hostname}:/home/core/launch"
 
@@ -1038,7 +1074,8 @@ launch_service_unit = async (name, hostname) ->
 
     # Launch the service
     command =
-      "ssh -o \"StrictHostKeyChecking no\" core@#{hostname} << EOF\n" +
+      "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
+      "core@#{hostname} << EOF\n" +
       "fleetctl start launch/#{name}/#{name}.service \n" +
       "EOF"
 
@@ -1053,18 +1090,25 @@ launch_service_unit = async (name, hostname) ->
 launch_services = async (options, creds) ->
   try
     for unit of options.service_templates
+      console.log "Launching #{unit}"
       config = options.service_templates[unit]
 
       # Add shared data to this section of the template as a default.
       unless config.public_keys?
         config.public_keys = options.public_keys
       unless config.kick_address?
-        {dns} = options
-        if dns[dns.length - 1] == "."  # If address is fully qualified, get rid of the "."
-          dns = dns.slice(0, dns.length - 1)
-        config.kick_address = "kick.#{dns}:2000"
+        phz = options.private_hosted_zone
+        phz = phz.slice(0, phz.length - 1) # Remove trailing "."
+        config.kick_address = "kick.#{phz}:2000"
+
+      # Determine the correct CoreOS environmental variable to apply.
+      if get_hosted_zone_name( config.hostname) == options.public_hosted_zone
+        config.ip_address = "${COREOS_PUBLIC_IPV4}"
+      else
+        config.ip_address = "${COREOS_PRIVATE_IPV4}"
 
       # Render the template.
+      console.log "rendering..."
       yield render_service_template unit, config
       # Launch into the cluster.
       yield launch_service_unit unit, options.hostname
@@ -1080,33 +1124,51 @@ customize_cluster = async (options, creds) ->
   # Gather success data as we go.
   data = {}
   try
+    #---------------
+    # Hostname
+    #---------------
     # Set the specified hostname to the cluster's IP address.
     if options.hostname?
+      options.hostname = fully_qualified options.hostname
+      {zone_name, zone_id} = yield get_hosted_zone_id( options.hostname, creds)
+      options.public_hosted_zone = zone_name
+      options.public_dns_id = zone_id
+
+      console.log "Registering Cluster in DNS"
       {result, change_id} = yield set_hostname options, creds
       data.set_hostname = result
-      data.detect_hostname = yield poll_until_true get_dns_change_status, change_id,
+      data.detect_hostname = yield poll_until_true get_record_change_status, change_id,
        creds, 5000, "Unable to detect DNS record change."
     else
-      data.set_hostname = build_success "No hostname specified, using cluster IP Address.", options.ip_address
-      options.hostname = options.ip_address
+      data.set_hostname = build_success "No hostname specified, using cluster IP Address.", options.instances[0].public_ip
+      options.hostname = options.instances[0].public_ip
 
     console.log "Cluster Hostname Set"
 
+    #---------------
+    # Private DNS
+    #---------------
+    # Use a "smart defualt" if neccessary and ensure domain is fully qualified.
+    options.private_hosted_zone ||= "awesome.cluster."
+    options.private_hosted_zone = fully_qualified options.private_hosted_zone
+
     # Establish a private DNS service available only on the cluster.
-    options.dns ||= "panda.awesome."     # "smart default" for private dns hostedzone domain.
-    {result, change_id, zone_id} = yield launch_private_dns options, creds
-    console.log "Private DNS launched: #{change_id} #{zone_id}"
+    {result, change_id, zone_id} = yield create_private_hosted_zone options, creds
+    console.log "Private DNS launched: #{options.private_hosted_zone} #{change_id} #{zone_id}"
     data.launch_private_dns = result
-    options.dns_zone_id = zone_id
-    data.detect_private_dns_formation = yield poll_until_true get_private_dns_status,
+    options.private_dns_id = zone_id
+    data.detect_private_dns_formation = yield poll_until_true get_hosted_zone_status,
       change_id, creds, 5000, "Unable to detect Private DNS formation."
     console.log "Private DNS fully online."
 
-    # Establish the Launch Repository, Kick Server, and Hook Server.
+    #---------------------
+    # Final Customization
+    #---------------------
+    # Establish the Launch Repository and Kick Server.
     data.prepare_launch_directory = yield prepare_launch_directory options
     console.log "Launch Directory Created."
     data.prepare_kick = yield prepare_kick options, creds
-    console.log "\n\n\nKick Server Online."
+    console.log "Kick Server Online."
 
     # Launch any listed services into the cluster.
     data.launch_services = yield launch_services options, creds
@@ -1149,39 +1211,49 @@ module.exports =
       # Make calls to Amazon's API. Gather data as we go.
       data = {}
       data.launch_stack = yield launch_stack(options, credentials)
-      console.log "Stack Launched."
+      console.log "Stack Launched.  Formation In-Progress."
 
       # Monitor the CloudFormation stack until it is fully created.
       data.detect_formation = yield poll_until_true get_formation_status, options,
        credentials, 5000, "Unable to detect cluster formation."
       console.log "Stack Formation Complete."
 
+      # Now that CloudFormation is complete, identify the VPC and subnet that were created.
+      options.vpc_id = yield get_cluster_vpc_id options, credentials
+      options.subnet_id = yield get_cluster_subnet options, credentials
+
       # If we're using spot instances, we'll need to wait and detect when our Spot Request has been fulfilled.
       if options.spot_price?
-        options.subnet_id = yield get_cluster_subnet options, credentials
-        data.detect_spot_fulfillment = yield poll_until_true get_spot_status, options,
+        console.log "Waiting for Spot Instance Fulfillment."
+        # Spot Instances - wait for our Spot Request to be fulfilled.
+        {result, instances} = yield poll_until_true get_spot_status, options,
          credentials, 5000, "Unable to detect Spot Instance fulfillment."
 
-        options.instance_id = (yield get_spot_status options, credentials).instance_id
-        console.log "Spot Instance Fulfilled: #{options.instance_id}"
-
-        # Now that the cluster is fully formed, grab its IP address for later.
-        {ip_address, private_ip_address} = yield get_spot_ip_address( options, credentials)
-        options.ip_address = ip_address
-        options.private_ip_address = private_ip_address
-        console.log "IP Addresses: #{ip_address} #{private_ip_address}"
-
+        data.detect_spot_fulfillment = result
+        options.instances = instances
+        console.log "Spot Request Fulfilled. Instance Online."
       else
-        # Now that the cluster is fully formed, grab its IP address for later.
-        {ip_address, private_ip_address} = yield get_on_demand_ip_address( options, credentials)
-        options.ip_address = ip_address
-        options.private_ip_address = private_ip_address
-        console.log "IP Addresses: #{ip_address} #{private_ip_address}"
+        # On-Demand Instances - already active from CloudFormation.
+        options.instances = yield get_on_demand_instances options, credentials
+        console.log "On-Demand Instance Online."
+
+
+      # Get the IP addresses of our instances.
+      console.log "Retrieving Primary Public and Private IP Addresses."
+      for i in [0..options.instances.length - 1]
+        {id} = options.instances[i]
+        {public_ip, private_ip} = yield get_ip_address(id, credentials)
+        options.instances[i] =
+          id: id
+          public_ip: public_ip
+          private_ip: [private_ip]
+        console.log "Instance #{id}: #{public_ip} #{private_ip}"
 
       # Continue setting up the cluster.
       data.customize_cluster = yield customize_cluster( options, credentials)
 
-      console.log  JSON.stringify data, null, '\t'
+      console.log "Done. \n"
+      #console.log  JSON.stringify data, null, '\t'
       return build_success "The requested cluster is online, configured, and ready.",
         data
 

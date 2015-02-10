@@ -7,35 +7,13 @@
 #===============================================================================
 
 elasticsearch:
-  output_file: "elasticsearch.service"
-  after: "docker.service"
+  after: ["docker.service"]
   container_name: "elasticsearch"
-  image_name: "elasticsearch_image"
-  ip_address: "${COREOS_PUBLIC_IPV4}"
-  port: "auto_private"
-  weight: "1"
-  priority: "1"
+  image_name: "pandastrike/pc_elasticsearch"
 
-hook_server:
-  output_filename: "hook-server.service"
-  after: "docker.service"
-  container_name: "hook"
-  image_name: "hook_image"
-  ip_address: "${COREOS_PUBLIC_IPV4}"
-  port: "3000"
-  weight: "1"
-  priority: "1"
 
 kibana:
-  output_file: "kibana.service"
-  after: "docker.service"
+  output_filename: "kibana.service"
+  after: ["docker.service", "elasticsearch.service"]
   container_name: "kibana"
-  image_name: "kibana_image"
-  ip_address: "${COREOS_PUBLIC_IPV4}"
-  port: "auto_public"
-  weight: "1"
-  priority: "1"
-
-redis:
-  output_filename: "redis.service"
-  after: "docker.service"
+  image_name: "pandastrike/pc_kibana"
