@@ -41,14 +41,15 @@ module.exports = async ->
           name: cluster_name
         cluster_res = yield clusters.put cluster_url, cluster_entry
 
-        create_request = deep_copy user
-        #create_request = user
+        # FIXME: deep copy this bad boy
+        #create_request = deep_copy user
+
+        create_request = user
         create_request.stack_name = cluster_name
-        console.log "*****original object: ", user
-        console.log "*****cloned object: ", create_request
 
         # FIXME: removed yield in clusters.create
-        #res = pandacluster.create create_request
+        res = pandacluster.create create_request
+        # FIXME: delete field because "create_request = user" is shallow copy
         delete create_request.stack_name
         respond 201, "", {location: (url "cluster", {cluster_url})}
       else
@@ -70,8 +71,6 @@ module.exports = async ->
         clusters.delete cluster_url
         # FIXME: removed yield in clusters.delete
         pandacluster.destroy request_data
-        console.log "*****just finished deleting in handlers"
-        respond 200, {cluster_status}
       else
         respond 401, "invalid email or token"
 

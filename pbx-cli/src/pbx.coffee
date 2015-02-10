@@ -1,7 +1,13 @@
-{lift} = require "when"
+{promise, lift} = require "when"
 async = (require "when/generator").lift
 {discover} = require "./client"
 
+# This is a wrap of setTimeout with ES6 technology that forces a non-blocking
+# # pause in execution for the specified duration (in ms).
+pause = (duration) ->
+ promise (resolve, reject) ->
+   callback = -> resolve()
+   setTimeout callback, duration
 
 module.exports =
 
@@ -26,6 +32,20 @@ module.exports =
     {data} = (yield cluster.get())
     data = (yield data)
 
+  wait_on_cluster: async ({cluster_url, secret_token, url}) ->
+
+    api = (yield discover url)
+    cluster = (api.cluster cluster_url)
+    while true
+      {data} = (yield cluster.get())
+      {cluster_status} = yield data
+      console.log "*****current cluster_status: ", cluster_status.message
+      if(cluster_status.message == "The cluster is confirmed to be online and ready.")
+        return cluster_status # The cluster formation complete.
+      else
+        yield pause 5000  # Not complete, keep going.
+
+
   # FIXME: filter out secret keys in response
   create_user: async ({aws, email, url, key_pair, public_keys}) ->
 
@@ -37,8 +57,5 @@ module.exports =
   delete_cluster: async ({cluster_url, secret_token, url}) ->
 
     api = (yield discover url)
-    console.log "*****pbx controller cluster_url: ", cluster_url
     cluster = (api.cluster cluster_url)
-    result = (yield cluster.delete headers: Authorization: secret_token)
-    console.log "*****result of delete: ", result
-    console.log "*****end of pbx.coffee delete, doesn't print out"
+    result = (yield cluster.delete())
