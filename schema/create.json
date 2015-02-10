@@ -83,7 +83,7 @@
       "description:": "These tags are arbitrary descriptions associated with your EC2 instances and are viewable in the console.",
       "type": "array",
       "item": {
-        "type": "object"
+        "type": "object",
         "properties": {
           "Key": {
             "description": "Describes a an arbitrary category for your tag.",
