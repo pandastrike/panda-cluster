@@ -74,72 +74,72 @@ aws:
   key: "Password123"
   region: "us-west-1"
 
-  public_keys: [
-    "This should be",
-    "a series of strings",
-    "that are comma separated.",
-    "One line per key."
-  ]
+public_keys: [
+  "This should be",
+  "a series of strings",
+  "that are comma separated.",
+  "One line per key."
+]
 
-  #=============================
-  # Cluster Description
-  #=============================
-  stack_name: "AppName"   # Required
-  key_pair: "KeyName"   # Required
-  channel: "stable"
+#=============================
+# Cluster Description
+#=============================
+stack_name: "AppName"   # Required
+key_pair: "KeyName"   # Required
+channel: "stable"
 
-  hostname: "myapp.pandastrike.com"     # This is public hostname for the "head" machine.  You must own the domain.
-  private_hosted_zone: "myapp.cluster"  # This is only visible inside the cluster and may be whatever you like.
+hostname: "myapp.pandastrike.com"     # This is public hostname for the "head" machine.  You must own the domain.
+private_hosted_zone: "myapp.cluster"  # This is only visible inside the cluster and may be whatever you like.
 
-  # **WARNING** - These affect the cost of your cluster.  See AWS Documentation for pricing.
-  instance_type: "m1.medium"
-  cluster_size: "3"
-  spot_price: "0.009"   # Tell panda-cluster to use Spot Instances at this hourly rate.
-  # Omit this line to use On-Demand Instances.
-  #=============================
+# **WARNING** - These affect the cost of your cluster.  See AWS Documentation for pricing.
+instance_type: "m1.medium"
+cluster_size: "3"
+spot_price: "0.009"   # Tell panda-cluster to use Spot Instances at this hourly rate.
+                      # Omit this line to use On-Demand Instances.
+#=============================
 
-  # Optional Tag Descriptions
-  tags: [
-    {
-      Key: "Name"
-      Value: "App Name"
-    }
-    {
-      Key: "customer"
-      Value: "foobar-inc"
-    }
-    {
-      Key: "environment"
-      Value: "dev"
-    }
-    {
-      Key: "project"
-      Value: "awesome"
-    }
-    {
-      Key: "role"
-      Value: "coreos"
-    }
-    ]
+# Optional Tag Descriptions
+tags: [
+  {
+    Key: "Name"
+    Value: "App Name"
+  }
+  {
+    Key: "customer"
+    Value: "foobar-inc"
+  }
+  {
+    Key: "environment"
+    Value: "dev"
+  }
+  {
+    Key: "project"
+    Value: "awesome"
+  }
+  {
+    Key: "role"
+    Value: "coreos"
+  }
+]
 
 
-    #=============================
-    # Template Descriptions
-    #=============================
-    # Template configurations of services that are needed *during* cluster formation.  These are limited
-    # to services that change properties of the instances themselves.
-    formation_service_templates:
-    format_ephemeral: "default"
-    var_lib_docker: "default"
+#=============================
+# Template Descriptions
+#=============================
+# Template configurations of services that are needed *during* cluster formation.  These are limited
+# to services that change properties of the instances themselves.
+formation_service_templates:
+  format_ephemeral: "default"
+  var_lib_docker: "default"
 
-    # Template configuartions of services that can be deployed after the instances are online.  However,
-    # these services are deployed before panda-cluster declares your cluster ready for access.  Most
-    # services fall into this category.
+# Template configuartions of services that can be deployed after the instances are online.  However,
+# these services are deployed before panda-cluster declares your cluster ready for access.  Most
+# services fall into this category.
 
-    # Each service file gets a sub-object below.  The members of each sub-object are used (via MustacheJS)
-    # to substitute values in the *.template files.
-    service_templates:
-    elasticsearch:
+# Each service file gets a sub-object below.  The members of each sub-object are used (via MustacheJS)
+# to substitute values in the *.template files.
+service_templates:
+  elasticsearch:
     output_filename: "elasticsearch.service"
     after: ["docker.service"]
     container_name: "elasticsearch"
@@ -149,7 +149,7 @@ aws:
     type: "A"
 
 
-    kibana:
+ kibana:
     output_filename: "kibana.service"
     after: ["docker.service", "elasticsearch.service"]
     container_name: "kibana"
