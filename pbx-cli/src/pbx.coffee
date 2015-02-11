@@ -18,13 +18,6 @@ module.exports =
     {response: {headers: {location}}}  = (yield clusters.create {cluster_name, email, secret_token})
     location
 
-#  get_cluster_status: async ({cluster_name, email, secret_token, url}) ->
-#
-#    api = (yield discover url)
-#    clusters = (api.clusters)
-#    {data} = (yield clusters.get_status {cluster_name, email, secret_token})
-#    data = (yield data)
-
   get_cluster_status: async ({cluster_url, secret_token, url}) ->
 
     api = (yield discover url)
@@ -44,7 +37,6 @@ module.exports =
         return cluster_status # The cluster formation complete.
       else
         yield pause 5000  # Not complete, keep going.
-
 
   # FIXME: filter out secret keys in response
   create_user: async ({aws, email, url, key_pair, public_keys}) ->
