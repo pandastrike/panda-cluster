@@ -482,7 +482,7 @@ launch_stack = async (options, creds) ->
     # Parameters is a map of key/values custom defined for this stack by the
     # template file.  We will now fill out the map as specified or with defaults.
     #---------------------------------------------------------------------------
-    String(options.cluster_size) if options.cluster_size?
+    options.cluster_size = String(options.cluster_size)     if options.cluster_size?
 
     params.Parameters = [
 
@@ -971,13 +971,12 @@ get_hosted_zone_status = async (change_id, creds) ->
 prepare_launch_directory = async (options) ->
   output = []
   try
-    for address in pluck( options.instances, "public_ip")
-      command =
-        "scp -o \"StrictHostKeyChecking no\" -o \"UserKnownHostsFile=/dev/null\" " +
-        "-r #{__dirname}/launch/ " +
-        "core@#{address}:/home/core/."
+    command =
+      "scp -o \"StrictHostKeyChecking no\" -o \"UserKnownHostsFile=/dev/null\" " +
+      "-r #{__dirname}/launch/ " +
+      "core@#{options.instances[0].public_ip}:/home/core/."
 
-      output.push yield execute command
+    output.push yield execute command
 
     return build_success "The Launch Repositories are ready.", output
   catch error
