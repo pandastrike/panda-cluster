@@ -170,14 +170,14 @@ default_merge = async (name, unit, default_path) ->
   return final
 
 # Render the template of one of many possible service files.  Write to the Launch Directory.
-render_service_template = async (config_name, input) ->
+render_service_template = async (config_name, input, root_directory) ->
   template_name = dashed plain_text config_name
-  path_to_template = resolve __dirname, "launch/#{template_name}/#{template_name}.template"
-  path_to_defaults = resolve __dirname, "launch/defaults.cson"
+  path_to_template = resolve root_directory, "launch/#{template_name}/#{template_name}.template"
 
-  content = yield render_template config_name, input, path_to_template, path_to_defaults
-  path = resolve __dirname, "launch/#{template_name}/#{input.output_filename}"
+  content = yield render_template config_name, input, path_to_template
+  path = resolve root_directory, "launch/#{template_name}/#{template_name}.service"
   yield write_file path, content
+
 
 
 # Render the template of one of the more rare service files that are included in cluster-formation.
@@ -971,12 +971,14 @@ get_hosted_zone_status = async (change_id, creds) ->
 prepare_launch_directory = async (options) ->
   output = []
   try
-    command =
-      "scp -o \"StrictHostKeyChecking no\" -o \"UserKnownHostsFile=/dev/null\" " +
-      "-r #{__dirname}/launch/ " +
-      "core@#{options.instances[0].public_ip}:/home/core/."
+    for address in pluck( options.instances, "public_ip")
+      # Dump the repo's launch directory on the cluster.
+      command =
+        "scp -o \"StrictHostKeyChecking no\" -o \"UserKnownHostsFile=/dev/null\" " +
+        "-r #{process.cwd()}/launch/ " +
+        "core@#{address}:/home/core/."
 
-    output.push yield execute command
+      output.push yield execute command
 
     return build_success "The Launch Repositories are ready.", output
   catch error
@@ -999,16 +1001,13 @@ prepare_kick = async (options, creds) ->
     console.log "Adding Kick Server to DNS Record"
     {result, change_id} = yield add_dns_record( params, creds)
     output.register_kick = result
-    output.detect_registration = yield poll_until_true get_record_change_status,
-      change_id, creds, 5000, "Unable to detect Kick registration.", 25
-    console.log "DNS Record Synchronized."
 
     console.log "Building Kick Container...  This will take a moment."
-    # Build the Kick's Docker container from its Dockerfile.
+    # Pull the Kick's Docker container from the public repo.
     command =
       #"ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
       "ssh -A -o \"StrictHostKeyChecking no\"  -o \"UserKnownHostsFile=/dev/null\" " +
-      "core@#{options.hostname} << EOF\n" +
+      "core@#{options.instances[0].public_ip} << EOF\n" +
       "docker pull pandastrike/pc_kick \n" +
       "EOF"
 
@@ -1024,7 +1023,7 @@ prepare_kick = async (options, creds) ->
 
     command =
       "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
-      "core@#{options.hostname} << EOF\n" +
+      "core@#{options.instances[0].public_ip} << EOF\n" +
       "docker run -d -p 2000:80 --name kick pandastrike/pc_kick /bin/bash -c " +
       "\"cd panda-cluster-kick && " +
 
@@ -1054,26 +1053,187 @@ prepare_kick = async (options, creds) ->
       "EOF"
 
     output.run_kick = yield execute command
-    return build_success "The Kick Server is online.", output
+    return {
+      result: build_success "The Kick Server is online.", output
+      change_id: change_id
+    }
 
   catch error
     return build_error "Unable to install the Kick Server.", error
 
 
+# Prepare the cluster to be self-sufficient by launching the Hook server on the "main"
+# cluster machine.  This is short for "git webhook"; a server that launches arbitary
+# scripts based on user interactions via git, which acts over SSH.
+prepare_hook = async (options, creds) ->
+  output = {}
+  try
+    console.log "Building Hook Container...  This will take a moment."
+    # Pull the Hook Server's Docker container from the public repo.
+    command =
+      #"ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
+      "ssh -A -o \"StrictHostKeyChecking no\"  -o \"UserKnownHostsFile=/dev/null\" " +
+      "core@#{options.instances[0].public_ip} << EOF\n" +
+      "docker pull pandastrike/pc_hook \n" +
+      "EOF"
 
-# Helper function that launches a single unit from PandaCluster's library onto the cluster.
+    output.build_hook = yield execute command
+
+    #----------------------------
+    # Activate the hook server.
+    #----------------------------
+    command =
+      "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
+      "core@#{options.instances[0].public_ip} << EOF\n" +
+      "docker run -d -p 3000:22 --name hook pandastrike/pc_hook /bin/bash -c \""
+
+    # Pass in public keys so users may have access.
+    for key in options.public_keys
+      command = command + " echo \'#{key}\' >> .ssh/authorized_keys && "
+
+    # Have the server generate host keys and activate the SSH daemon.
+    command = command +
+      "ssh-keygen -f /etc/ssh/ssh_host_rsa_key && " +
+      "ssh-keygen -f /etc/ssh/ssh_host_dsa_key && " +
+      "ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key && " +
+      "ssh-keygen -f /etc/ssh/ssh_host_ed25519_key && " +
+      "/usr/sbin/sshd && "
+
+    # Activate a dummy node server to keep the conainter active.
+    command = command +
+      "coffee dummy.coffee\" \n" +
+      "EOF"
+
+    output.run_hook = yield execute command
+    return build_success "The Hook Server is online.", output
+
+  catch error
+    console.log error
+    return build_error
+
+
+
+# This helper function renders templates of githook scripts according the user's specifications.
+# This is done via MustacheJS, just like we do with the *.service files.
+render_githook_template = async (type, options) ->
+  path_to_template = resolve __dirname, "githooks/#{type}.template"
+
+  input =
+    repo_name: options.repo_name
+    hostname: options.hostname
+    restart: options.restart
+
+  content = yield simple_render input, path_to_template
+  path = resolve __dirname, "githooks/temp"
+  yield write_file path, content
+
+
+# This function connects to the cluster's git-based-webhook (hook) server and sets up initial
+# repos and githooks. (arbitrary scripts triggered by git commands)
+install_githooks = async (options) ->
+  output = {}
+  try
+    # SSH to the hook server and setup a "bare" repository.  Assume that the directory
+    # panda-cluster is being executed is the name of the repo being deployed.
+    repo_name = process.cwd().split("/")
+    repo_name = repo_name[repo_name.length - 1]
+    options.repo_name = repo_name
+
+    command =
+      "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
+      "-p 3000 root@#{options.hostname} << EOF\n" +
+      "mkdir repos && cd repos \n" +
+      "mkdir #{repo_name}.git && cd #{repo_name}.git \n" +
+      "/usr/bin/git init --bare \n" +
+      "EOF"
+
+    output.initiate = yield execute command
+
+    # Now add a "huxley" alias for this remote repo to the local git repo.
+    command =
+      "git remote rm  huxley && " +
+      "git remote add huxley ssh://root@#{options.hostname}:3000/repos/#{repo_name}.git"
+
+    output.alias = yield execute command
+
+    # Render the "restart" githook that will be eventually labeled "post-receive"
+    # and used for continuous integration.
+    yield render_githook_template "restart", options
+
+    # Place this "temp" file into the hook-server as post-receive.
+    command =
+      "scp -o \"StrictHostKeyChecking no\" -o \"UserKnownHostsFile=/dev/null\" " +
+      "-P 3000 #{__dirname}/githooks/temp " +
+      "root@#{options.hostname}:/repos/#{repo_name}.git/hooks/post-receive"
+
+    output.place_hook = yield execute command
+
+    # And finally, make this script executable so git commands trigger it.
+    command =
+      "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
+      "-p 3000 root@#{options.hostname} << EOF\n" +
+      "cd repos/#{repo_name}.git/hooks \n" +
+      "chmod +x post-receive"
+
+    return build_success, "Githooks installed successfully.", output
+
+  catch error
+    console.log error
+    return build_error, "Unable to install githooks.", error
+
+
+
+
+
+# This function merges the specifications of a single template with "common data",
+# like public SSH keys.  This keeps the user from having to specify data redudantly.
+# However, this merge is overriden if the user specifies one of the keys that is auto-handled.
+reconcile_specifications = (config, options) ->
+  # Add shared data to this section of the template as a default.
+  unless config.public_keys?
+    config.public_keys = options.public_keys
+  unless config.kick_address?
+    phz = options.private_hosted_zone
+    phz = phz.slice(0, phz.length - 1) # Remove trailing "."
+    config.kick_address = "kick.#{phz}:2000"
+
+  # Determine the correct CoreOS environmental variable to apply.
+  if config.hostname?
+    if get_hosted_zone_name( config.hostname) == options.public_hosted_zone
+      config.ip_address = "${COREOS_PUBLIC_IPV4}"
+    else
+      config.ip_address = "${COREOS_PRIVATE_IPV4}"
+
+  return config
+
+# Helper function to determine the source of a given service file.  Are they coming from
+# the panda-cluster library, or are they custom user services. Thankfully, we can tell pretty
+# easily because panda-cluster services are prefixed with "pc-".
+get_root_directory = (name) ->
+  name = dashed plain_text name
+  split_name = name.split "-"
+
+  if split_name[0] == "pc"
+    return __dirname
+  else
+    return process.cwd()
+
+# Helper function that places a rendered service template on the cluster.
+place_service_unit = async (name, hostname, root_directory) ->
+  name = dashed plain_text name
+  # Place a copy of the customized unit file on the cluster.
+  command =
+    "scp -o \"StrictHostKeyChecking no\" -o \"UserKnownHostsFile=/dev/null\" " +
+    "-r #{root_directory}/launch/#{name} " +
+    "core@#{hostname}:/home/core/launch"
+
+  yield execute command
+
+# Helper function that launches a single unit located on the cluster.
 launch_service_unit = async (name, hostname) ->
   try
     name = dashed plain_text name
-    # Place a copy of the customized unit file on the cluster.
-    command =
-      "scp -o \"StrictHostKeyChecking no\" -o \"UserKnownHostsFile=/dev/null\" " +
-      "-r #{__dirname}/launch/#{name} " +
-      "core@#{hostname}:/home/core/launch"
 
-    yield execute command
-
-    # Launch the service
     command =
       "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
       "core@#{hostname} << EOF\n" +
@@ -1094,23 +1254,13 @@ launch_services = async (options, creds) ->
       console.log "Launching #{unit}"
       config = options.service_templates[unit]
 
-      # Add shared data to this section of the template as a default.
-      unless config.public_keys?
-        config.public_keys = options.public_keys
-      unless config.kick_address?
-        phz = options.private_hosted_zone
-        phz = phz.slice(0, phz.length - 1) # Remove trailing "."
-        config.kick_address = "kick.#{phz}:2000"
+      # We wish to only render templates for units that have variables specified.
+      if config != null
+        config = reconcile_specifications config, options
+        root_directory = get_root_directory unit
+        yield render_service_template unit, config, root_directory
+        yield place_service_unit unit, options.hostname, root_directory
 
-      # Determine the correct CoreOS environmental variable to apply.
-      if get_hosted_zone_name( config.hostname) == options.public_hosted_zone
-        config.ip_address = "${COREOS_PUBLIC_IPV4}"
-      else
-        config.ip_address = "${COREOS_PRIVATE_IPV4}"
-
-      # Render the template.
-      console.log "rendering..."
-      yield render_service_template unit, config
       # Launch into the cluster.
       yield launch_service_unit unit, options.hostname
 
@@ -1124,6 +1274,7 @@ launch_services = async (options, creds) ->
 customize_cluster = async (options, creds) ->
   # Gather success data as we go.
   data = {}
+  dns_changes = {}
   try
     #---------------
     # Hostname
@@ -1138,13 +1289,10 @@ customize_cluster = async (options, creds) ->
       console.log "Registering Cluster in DNS"
       {result, change_id} = yield set_hostname options, creds
       data.set_hostname = result
-      data.detect_hostname = yield poll_until_true get_record_change_status, change_id,
-       creds, 5000, "Unable to detect DNS record change."
+      dns_changes.hostname = change_id
     else
       data.set_hostname = build_success "No hostname specified, using cluster IP Address.", options.instances[0].public_ip
       options.hostname = options.instances[0].public_ip
-
-    console.log "Cluster Hostname Set"
 
     #---------------
     # Private DNS
@@ -1162,20 +1310,46 @@ customize_cluster = async (options, creds) ->
       change_id, creds, 5000, "Unable to detect Private DNS formation."
     console.log "Private DNS fully online."
 
-    #---------------------
-    # Final Customization
-    #---------------------
-    # Establish the Launch Repository and Kick Server.
+    #---------------------------------------------------
+    # Kick + Launch Directory
+    #---------------------------------------------------
     data.prepare_launch_directory = yield prepare_launch_directory options
     console.log "Launch Directory Created."
-    data.prepare_kick = yield prepare_kick options, creds
+
+    result = yield prepare_kick options, creds
+    data.prepare_kick = result.result
+    dns_changes.kick = result.change_id
     console.log "Kick Server Online."
 
-    # Launch any listed services into the cluster.
+    #-----------------------------
+    # Confirm DNS Changes
+    #-----------------------------
+    # We poll here to be more efficient.  Amazon should be done updating its DNS records
+    # by the time we build all the built-in Docker stuff.  We shave two minutes off
+    # our startup time, and just play it safe by double-checking here.
+    data.detect_hostname = yield poll_until_true get_record_change_status, dns_changes.hostname,
+     creds, 5000, "Unable to detect DNS record change."
+    console.log "Cluster Hostname Set"
+
+    data.detect_kick = yield poll_until_true get_record_change_status, dns_changes.kick,
+     creds, 5000, "Unable to detect Kick registration.", 25
+    console.log "Kick Hostname Set"
+
+    #-------------
+    # Hook Server
+    #-------------
+    data.prepare_hook = yield prepare_hook options, creds
+    console.log "Hook Server Online."
+    data.githooks = yield install_githooks options
+    console.log "Githooks installed."
+
+    #---------------------------------------------------------------
+    # Service Launch - Launch any listed services into the cluster.
+    #---------------------------------------------------------------
     data.launch_services = yield launch_services options, creds
 
-    return build_success "Cluster customizations are complete.", data
 
+    return build_success "Cluster customizations are complete.", data
   catch error
     console.log error
     return build_error "Unable to properly configure cluster.", error

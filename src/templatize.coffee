@@ -39,7 +39,10 @@ module.exports =
     try
       # Grab the contents of the template file and this template's defaults.
       template = yield read_file( resolve( template_path))
-      data = parse( yield read_file( resolve( defaults_path)))[template_name]
+      if defaults_path?
+        data = parse( yield read_file( resolve( defaults_path)))[template_name]
+      else
+        data = {}
 
       # We're starting with all default values, and then we insert any explicit configuration input.
       data[key] = input_values[key]   for key of input_values
@@ -47,5 +50,13 @@ module.exports =
       # Render the template and return the resulting string.
       return render template, data
 
+    catch error
+      return error
+
+  # This is a very cut-and-dry rendering function.  For templates that are not as crazy as the service files.
+  simple_render: async (input, template_path) ->
+    try
+      template = yield read_file( resolve( template_path))
+      return render template, input
     catch error
       return error

@@ -53,8 +53,10 @@ parse_cli = (command, argv) ->
   usage command   if argv[0] == "-h" || argv[0] == "help"
 
   # Begin constructing the "options" object by pulling persistent configuration data
-  # from the CSON file in the user's $HOME directory.
-  options = parse( read( resolve("#{process.env.HOME}/.panda-cluster.cson")))
+  # from the Huxley manifest and the CSON file in the user's $HOME directory.  The user's
+  # AWS credentials are kept in the dotfile to be separate and safe from the proejct repository.
+  options = parse( read( resolve( "#{process.cwd()}/huxley.cson")))
+  options.aws = parse( read( resolve("#{process.env.HOME}/.panda-cluster.cson"))).aws
 
   # Extract flag data from the argument definition for this sub-command.
   definitions = parse( read( resolve(  __dirname, "arguments.cson")))
