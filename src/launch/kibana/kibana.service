@@ -1,0 +1,50 @@
+#===============================================================================
+# PandaCluster - Service File
+#===============================================================================
+
+[Unit]
+Description=Spin Up Service
+
+
+After=docker.service
+After=elasticsearch.service
+
+[Service]
+TimeoutStartSec=0
+
+ExecStartPre=/usr/bin/echo "========================"
+ExecStartPre=/usr/bin/echo "  New Service Starting"
+ExecStartPre=/usr/bin/echo "========================"
+
+# Display this service's IP addresses.
+EnvironmentFile=/etc/environment
+ExecStartPre=/usr/bin/echo "Public IP Address: ${COREOS_PUBLIC_IPV4}"
+ExecStartPre=/usr/bin/echo "Private IP Address: ${COREOS_PRIVATE_IPV4}"
+
+
+# Pull The Service's Docker Container.
+ExecStartPre=-/usr/bin/docker kill kibana
+ExecStartPre=-/usr/bin/docker rm kibana
+ExecStartPre=/usr/bin/docker pull pandastrike/pc_kibana
+
+# Register this service with DNS.
+ExecStartPre=/usr/bin/curl -XPOST kick.donuts.cluster:2000 -d '\
+  "hostname": "kibana.donuts.pandastrike.com",      \
+  "ip_address": "${COREOS_PUBLIC_IPV4}",  \
+  "port": "80",  \
+  "type": ""'
+
+ExecStart=/usr/bin/docker run --name kibana -p 80:5601 \
+  pandastrike/pc_kibana /bin/bash -c \
+  'cd /kibana-4.0.0-beta3/config &&\
+  sed "s/localhost:9200/elasticsearch.donuts.cluster:2001/g" < kibana.yml > temp && \
+  mv temp kibana.yml && \
+  cd /kibana-4.0.0-beta3/bin && ./kibana'
+
+
+[Install]
+WantedBy=multi-user.target
+
+[X-Fleet]
+
+

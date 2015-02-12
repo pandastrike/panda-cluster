@@ -1,9 +1,9 @@
 #===============================================================================
-# PandaCluster - Cluster Formation Services
+# PandaCluster - Cluster Formation Service Defaults
 #===============================================================================
 # This directory is filled with special services launched by PandaCluster on the
 # user's behalf during cluster-formation.  This CSON file is a registry for
-# command settings that get placed into the "cloud-config" section of the AWS
+# default settings that get placed into the "cloud-config" section of the AWS
 # CloudFormation template.  We use this to handle a lot of gross formatting.
 #===============================================================================
 
@@ -11,15 +11,14 @@
 # the Docker host to that drive before "Docker.service" starts.  The amount of
 # additional storage you get depends on the EC2 instance you're using.  Look here for more...
 # http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/InstanceStorage.html
-mount_docker: [
-  {
-    name: "format-ephemeral.service"
-    runtime: "true"
-    command: "start"
-  },
-  {
-    name: "var-lib-docker.mount"
-    runtime: "true"
-    command: "start"
-  }
-]
+format_ephemeral:
+  output_filename: "format-ephemeral.service"
+  runtime: "true"
+  command: "start"
+  drive_path: "/dev/xvdb"
+
+var_lib_docker:
+  output_filename: "var-lib-docker.mount"
+  runtime: "true"
+  command: "start"
+  drive_path: "/dev/xvdb"

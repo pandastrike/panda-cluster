@@ -16,7 +16,7 @@ create:[
     allowed_values: ["alpha", "beta", "stable"]
   }
   {
-    name: "dns"
+    name: "private_hosted_zone"
     flag: "-d"
   }
   {
@@ -35,17 +35,10 @@ create:[
   {
     name: "key_pair"
     flag: "-k"
-    required: true
-  }
-  {
-    name: "mount_docker"
-    flag: "-m"
-    allowed_values: ["true"]
   }
   {
     name: "stack_name"
     flag: "-n"
-    required: true
   }
   {
     name: "region"

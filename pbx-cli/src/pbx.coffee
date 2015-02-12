@@ -11,11 +11,15 @@ pause = (duration) ->
 
 module.exports =
 
-  create_cluster: async ({cluster_name, email, secret_token, url}) ->
+  #create_cluster: async ({cluster_name, email, secret_token, url}) ->
+  create_cluster: async (args) ->
+    {url} = args
 
     api = (yield discover url)
     clusters = (api.clusters)
-    {response: {headers: {location}}}  = (yield clusters.create {cluster_name, email, secret_token})
+    {response: {headers: {location}}}  =
+      (yield clusters.create args)
+      #(yield clusters.create {cluster_name, email, secret_token})
     location
 
   get_cluster_status: async ({cluster_url, secret_token, url}) ->

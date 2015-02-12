@@ -33,9 +33,11 @@ amen.describe "Huxley API", (context) ->
     assert.ok secret_token
 
     context.test "Create a cluster", ->
-
+      pandaconfig.cluster_name = cluster_name
+      pandaconfig.secret_token = secret_token
       location =
-        (yield pbx.create_cluster {cluster_name, email, secret_token, url, key_pair, public_keys})
+        (yield pbx.create_cluster pandaconfig)
+        #(yield pbx.create_cluster {cluster_name, email, secret_token, url, key_pair, public_keys})
 
       cluster_url = location
       assert.ok cluster_url
@@ -48,14 +50,14 @@ amen.describe "Huxley API", (context) ->
 #      console.log "*****cluster_status: ", cluster_status
 #      assert.ok cluster_status
 
-      cluster_status =
-        (yield pbx.wait_on_cluster {cluster_url, secret_token, url})
-
-      console.log "*****cluster_status is done: ", cluster_status
-      assert.ok cluster_status
-
-#      context.test "Delete a cluster", ->
-#        url = pandaconfig.url
+#      cluster_status =
+#        (yield pbx.wait_on_cluster {cluster_url, secret_token, url})
 #
-#        response = (yield pbx.delete_cluster {cluster_url, secret_token, url})
-#        console.log "***** done deleting"
+#      console.log "*****cluster_status is done: ", cluster_status
+#      assert.ok cluster_status
+
+      context.test "Delete a cluster", ->
+        url = pandaconfig.url
+
+        response = (yield pbx.delete_cluster {cluster_url, secret_token, url})
+        console.log "***** done deleting"

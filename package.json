@@ -1,17 +1,17 @@
 {
-  "name": "PandaCluster",
+  "name": "panda-cluster",
   "version": "0.0.0",
-  "description": "Awesome Command-Line Tool and Library to Manage CoreOS Clusters",
+  "description": "Awesome NodeJS Library to Manage CoreOS Clusters",
   "main": "main.coffee",
   "bin": {
-    "pandacluster": "./bin/pandacluster"
+    "panda-cluster": "./bin/panda-cluster"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/pandastrike/PandaCluster.git"
+    "url": "https://github.com/pandastrike/panda-cluster.git"
   },
   "keywords": [
     "coreos",
@@ -24,16 +24,15 @@
   "author": "David Harper",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/pandastrike/PandaCluster/issues"
+    "url": "https://github.com/pandastrike/panda-cluster/issues"
   },
-  "homepage": "https://github.com/pandastrike/PandaCluster",
+  "homepage": "https://github.com/pandastrike/panda-cluster",
   "dependencies": {
     "amen": "^1.0.0-alpha-03",
     "aws-sdk": "^2.0.31",
     "c50n": "^0.7.1",
     "fairmont": "^0.8.2",
     "mustache": "^1.0.0",
-    "nock": "^0.56.0",
     "shelljs": "^0.3.0",
     "shred": "^1.1.0-alpha-03",
     "underscore": "^1.7.0",

@@ -1,0 +1,51 @@
+#===============================================================================
+# panda-cluster - Service Template
+#===============================================================================
+# This unit spins up a CoreOS service.
+
+[Unit]
+Description=Spin Up Service
+
+# List any services that must be online before this service is activated.
+
+# List any services that must wait for this service before starting.
+After=docker.service
+
+[Service]
+TimeoutStartSec=0
+
+ExecStartPre=/usr/bin/echo "========================"
+ExecStartPre=/usr/bin/echo "  New Service Starting"
+ExecStartPre=/usr/bin/echo "========================"
+
+# Display this service's IP addresses.
+EnvironmentFile=/etc/environment
+ExecStartPre=/usr/bin/echo "Public IP Address: ${COREOS_PUBLIC_IPV4}"
+ExecStartPre=/usr/bin/echo "Private IP Address: ${COREOS_PRIVATE_IPV4}"
+
+
+# Pull The Service's Docker Container.
+ExecStartPre=-/usr/bin/docker kill elasticsearch
+ExecStartPre=-/usr/bin/docker rm elasticsearch
+ExecStartPre=/usr/bin/docker pull pandastrike/pc_elasticsearch
+
+# Register this service with DNS.
+ExecStartPre=/usr/bin/curl -XPOST kick.donuts.cluster:2000 -d '\
+  "hostname": "elasticsearch.donuts.cluster",      \
+  "ip_address": "${COREOS_PRIVATE_IPV4}",  \
+  "port": "2001",  \
+  "type": "A"'
+
+ExecStart=/usr/bin/docker run --name elasticsearch -p 2001:9200 \
+  pandastrike/pc_elasticsearch /bin/bash -c \
+  'cd elasticsearch-1.4.2/bin && ./elasticsearch'
+
+
+[Install]
+WantedBy=multi-user.target
+
+[X-Fleet]
+
+# List any services that *must* be on the same machine as this service.
+
+# List any services that *cannot* be on the same machine as this service (ex. They share ports).

@@ -2,12 +2,7 @@ async = (require "when/generator").lift
 {call} = require "when/generator"
 {Memory} = require "pirate"
 
-pandacluster = require "../../../src/pandacluster"
-
-_  = require "underscore"
-
-deep_copy = (object) ->
-  _.map(object, _.clone)[0]
+pandacluster = require "../../../src/panda-cluster"
 
 make_key = -> (require "key-forge").randomKey 16, "base64url"
 
@@ -45,10 +40,13 @@ module.exports = async ->
         #create_request = deep_copy user
 
         create_request = user
-        create_request.stack_name = cluster_name
+        console.log "*****data sent in create: ", data
+        console.log "*****user sent in create: ", user
+        #create_request.stack_name = cluster_name
 
         # FIXME: removed yield in clusters.create
-        res = pandacluster.create create_request
+        #res = pandacluster.create create_request
+        res = pandacluster.create data
         # FIXME: delete field because "create_request = user" is shallow copy
         delete create_request.stack_name
         respond 201, "", {location: (url "cluster", {cluster_url})}
@@ -86,7 +84,9 @@ module.exports = async ->
         request_data =
           aws: user.aws
           stack_name: cluster.name
+        console.log "*****pandacluster: ", pandacluster
         cluster_status = yield pandacluster.get_cluster_status request_data
+        console.log "*****cluster_status: ", cluster_status
         respond 200, {cluster_status}
       else
         respond 401, "invalid email or token"

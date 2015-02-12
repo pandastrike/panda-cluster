@@ -1,0 +1,19 @@
+#===============================================================================
+# PandaCluster - Service Defaults
+#===============================================================================
+# This directory is filled with a number of Dockerfiles and the *.service files
+# needed to launch them into the cluster.  This CSON file serves as a registry
+# of default values for every template within.
+#===============================================================================
+
+elasticsearch:
+  after: ["docker.service"]
+  container_name: "elasticsearch"
+  image_name: "pandastrike/pc_elasticsearch"
+
+
+kibana:
+  output_filename: "kibana.service"
+  after: ["docker.service", "elasticsearch.service"]
+  container_name: "kibana"
+  image_name: "pandastrike/pc_kibana"

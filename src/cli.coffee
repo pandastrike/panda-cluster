@@ -1,8 +1,8 @@
 #===============================================================================
-# PandaCluster - Awesome Command-Line Tool and Library to Manage CoreOS Clusters
+# panda-cluster - Awesome Command-Line Tool and Library to Manage CoreOS Clusters
 #===============================================================================
-# This file specifies the Command-Line Interface for PandaCluster.  When used as
-# a command-line tool, we still call PandaCluster functions, but we have to build
+# This file specifies the Command-Line Interface for panda-cluster.  When used as
+# a command-line tool, we still call panda-cluster functions, but we have to build
 # the "options" object for each method by parsing command-line arguments.
 
 #===============================================================================
@@ -16,8 +16,8 @@
 # Awesome manipulations in the functional style.
 {pluck, where, flatten} = require "underscore"
 
-# Access PandaCluster!!
-PC = require "./pandacluster"
+# Access panda-cluster!!
+PC = require "./panda-cluster"
 
 
 #===============================================================================
@@ -54,7 +54,7 @@ parse_cli = (command, argv) ->
 
   # Begin constructing the "options" object by pulling persistent configuration data
   # from the CSON file in the user's $HOME directory.
-  options = parse( read( resolve("#{process.env.HOME}/.pandacluster.cson")))
+  options = parse( read( resolve("#{process.env.HOME}/.panda-cluster.cson")))
 
   # Extract flag data from the argument definition for this sub-command.
   definitions = parse( read( resolve(  __dirname, "arguments.cson")))
@@ -94,9 +94,9 @@ parse_cli = (command, argv) ->
 
 # We must finalize the array "options.formation_units".  This
 # variable is an array of objects detailing which services are launched during
-# cluster formation.  The list of all available units is in "src/services/formation-units.cson"
+# cluster formation.  The list of all available units is in "src/formation-services/formation-units.cson"
 gather_formation_units = (options) ->
-  unit_hash = parse( read( resolve(__dirname, "services/formation-units.cson")))
+  unit_hash = parse( read( resolve(__dirname, "formation-services/formation-units.cson")))
 
   # Build array.
   units = []
@@ -120,7 +120,7 @@ if argv.length == 0 || argv[0] == "-h" || argv[0] == "help"
 switch argv[0]
   when "create"
     options = parse_cli "create", argv[1..]
-    options.formation_units = gather_formation_units options
+    #options.formation_units = gather_formation_units options
     PC.create options
   when "destroy"
     options = parse_cli "destroy", argv[1..]
