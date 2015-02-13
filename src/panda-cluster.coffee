@@ -11,7 +11,6 @@ https = require "https"
 # In-House Libraries
 {parse} = require "c50n"                  # .cson file parsing
 {dashed} = require "fairmont"
-{writeFileSync} = require "fs"
 
 # Awsome functional style tricks.
 {where, pluck, every} = require "underscore"
@@ -26,7 +25,7 @@ async = (require "when/generator").lift
 {exec, error} = require "shelljs"
 
 # Included modules from PandaCluster
-{render_template} = require "./templatize"
+{render_template, simple_render} = require "./templatize"
 
 # Access AWS API
 AWS = require "aws-sdk"
@@ -92,9 +91,12 @@ build_success = (message, data) ->
 # Create a version of ShellJS's "exec" command with built-in error handling.  In
 # PandaCluster, we regularly use "exec" with SSH commands and other longish-running
 # processes, so we want to wrap "exec" in a promise and use "yield" statements.
-execute = (command) ->
+execute = (command, debug) ->
   promise (resolve, reject) ->
     exec command, (code, output) ->
+      if debug?
+        resolve output
+
       if code == 0
         resolve build_success "ShellJS successfully executed the specified shell command.", output
       else
@@ -1068,6 +1070,18 @@ prepare_kick = async (options, creds) ->
 prepare_hook = async (options, creds) ->
   output = {}
   try
+    # Add the kick server to the cluster's private DNS records.
+    params =
+      hostname: "hook.#{options.private_hosted_zone}"
+      zone_id: options.private_dns_id
+      type: "A"
+      ip_address: options.instances[0].private_ip[0]
+
+    console.log "Adding Hook Server to DNS Record"
+    {result, change_id} = yield add_dns_record( params, creds)
+    output.register_kick = result
+
+
     console.log "Building Hook Container...  This will take a moment."
     # Pull the Hook Server's Docker container from the public repo.
     command =
@@ -1085,27 +1099,30 @@ prepare_hook = async (options, creds) ->
     command =
       "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
       "core@#{options.instances[0].public_ip} << EOF\n" +
-      "docker run -d -p 3000:22 --name hook pandastrike/pc_hook /bin/bash -c \""
+      "docker run -d -p 3000:22 -p 2001:80 --name hook pandastrike/pc_hook /bin/bash -c \""
 
     # Pass in public keys so users may have access.
     for key in options.public_keys
-      command = command + " echo \'#{key}\' >> .ssh/authorized_keys && "
+      command = command + " echo \'#{key}\' >> root/.ssh/authorized_keys && "
 
-    # Have the server generate host keys and activate the SSH daemon.
+    # Have the server generate host keys, then activate the SSH server in non-
+    # detached mode, which keeps the container online.  We also need to use
+    # the setting "UsePAM no".  Otherwise, there is some bug in Docker that
+    # causes a connection failure with PAM in place.
     command = command +
-      "ssh-keygen -f /etc/ssh/ssh_host_rsa_key && " +
-      "ssh-keygen -f /etc/ssh/ssh_host_dsa_key && " +
-      "ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key && " +
-      "ssh-keygen -f /etc/ssh/ssh_host_ed25519_key && " +
-      "/usr/sbin/sshd && "
-
-    # Activate a dummy node server to keep the conainter active.
-    command = command +
-      "coffee dummy.coffee\" \n" +
+      "ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N ''      && " +
+      "ssh-keygen -f /etc/ssh/ssh_host_dsa_key -N ''      && " +
+      "ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key -N ''    && " +
+      "ssh-keygen -f /etc/ssh/ssh_host_ed25519_key -N ''  && " +
+      "/usr/sbin/sshd -e -o 'UsePAM no' && " +
+      "git daemon --port=80 --base-path=/root --export-all \"\n" +
       "EOF"
 
     output.run_hook = yield execute command
-    return build_success "The Hook Server is online.", output
+    return {
+      result: build_success "The Hook Server is online.", output
+      change_id: change_id
+    }
 
   catch error
     console.log error
@@ -1133,12 +1150,12 @@ render_githook_template = async (type, options) ->
 install_githooks = async (options) ->
   output = {}
   try
-    # SSH to the hook server and setup a "bare" repository.  Assume that the directory
-    # panda-cluster is being executed is the name of the repo being deployed.
+    # Assume that the directory panda-cluster is being executed in is the name of the repo being deployed.
     repo_name = process.cwd().split("/")
     repo_name = repo_name[repo_name.length - 1]
     options.repo_name = repo_name
 
+    # SSH to the hook server and setup a "bare" repository.   If the directory already exists, overwrite it.
     command =
       "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
       "-p 3000 root@#{options.hostname} << EOF\n" +
@@ -1149,12 +1166,17 @@ install_githooks = async (options) ->
 
     output.initiate = yield execute command
 
-    # Now add a "huxley" alias for this remote repo to the local git repo.
-    command =
-      "git remote rm  huxley && " +
-      "git remote add huxley ssh://root@#{options.hostname}:3000/repos/#{repo_name}.git"
 
-    output.alias = yield execute command
+    # Now add a "huxley" alias for this remote repo to the local git repo.  This is given as two separate
+    # commands because it's okay if the first one fails.
+    output.alias_1 = yield execute "git remote rm  huxley "
+    output.alias_2 = yield execute "git remote add huxley ssh://root@#{options.hostname}:3000/root/repos/#{repo_name}.git"
+
+
+    # Now, push our repo to the hook server to get us started.  This also allows containers on the cluster to draw
+    # from the hook-server during start-up. This removes the need for public repos or GitHub credentials.
+    output.first_push = yield execute "git push huxley HEAD"
+
 
     # Render the "restart" githook that will be eventually labeled "post-receive"
     # and used for continuous integration.
@@ -1164,7 +1186,7 @@ install_githooks = async (options) ->
     command =
       "scp -o \"StrictHostKeyChecking no\" -o \"UserKnownHostsFile=/dev/null\" " +
       "-P 3000 #{__dirname}/githooks/temp " +
-      "root@#{options.hostname}:/repos/#{repo_name}.git/hooks/post-receive"
+      "root@#{options.hostname}:repos/#{repo_name}.git/hooks/post-receive"
 
     output.place_hook = yield execute command
 
@@ -1175,11 +1197,12 @@ install_githooks = async (options) ->
       "cd repos/#{repo_name}.git/hooks \n" +
       "chmod +x post-receive"
 
-    return build_success, "Githooks installed successfully.", output
+    output.chmod = yield execute command, true
+    return build_success "Githooks installed successfully.", output
 
   catch error
     console.log error
-    return build_error, "Unable to install githooks.", error
+    return build_error "Unable to install githooks.", error
 
 
 
@@ -1311,7 +1334,7 @@ customize_cluster = async (options, creds) ->
     console.log "Private DNS fully online."
 
     #---------------------------------------------------
-    # Kick + Launch Directory
+    # Launch Dir + Kick + Hook
     #---------------------------------------------------
     data.prepare_launch_directory = yield prepare_launch_directory options
     console.log "Launch Directory Created."
@@ -1320,6 +1343,11 @@ customize_cluster = async (options, creds) ->
     data.prepare_kick = result.result
     dns_changes.kick = result.change_id
     console.log "Kick Server Online."
+
+    result = yield prepare_hook options, creds
+    data.prepare_hook = result.result
+    dns_changes.hook = result.change_id
+    console.log "Hook Server Online."
 
     #-----------------------------
     # Confirm DNS Changes
@@ -1335,11 +1363,13 @@ customize_cluster = async (options, creds) ->
      creds, 5000, "Unable to detect Kick registration.", 25
     console.log "Kick Hostname Set"
 
+    data.detect_kick = yield poll_until_true get_record_change_status, dns_changes.hook,
+     creds, 5000, "Unable to detect Kick registration.", 25
+    console.log "Hook Hostname Set"
+
     #-------------
-    # Hook Server
+    # Githooks
     #-------------
-    data.prepare_hook = yield prepare_hook options, creds
-    console.log "Hook Server Online."
     data.githooks = yield install_githooks options
     console.log "Githooks installed."
 
@@ -1426,6 +1456,8 @@ module.exports =
 
       # Continue setting up the cluster.
       data.customize_cluster = yield customize_cluster( options, credentials)
+
+      #yield install_githooks options
 
       console.log "Done. \n"
       #console.log  JSON.stringify data, null, '\t'

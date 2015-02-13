@@ -26,22 +26,13 @@ RUN mkdir aur-packages && cd aur-packages && \
 RUN rm -rf aur-packages
 
 # Create directory to hold SSH data
-RUN mkdir .ssh  && \
-  touch .ssh/known_hosts  && touch .ssh/authorized_keys
+RUN mkdir root/.ssh               && \
+  touch root/.ssh/authorized_keys && \
+  chmod -R 700 root/.ssh
 
 # Add a configuration file so the hook-server allows agent-forwarding and isn't picky
 # about connecting to wherever we ask.
-RUN echo "Host *" >> .ssh/config  && \
-  echo "  ForwardAgent yes "  >> .ssh/config  && \
-  echo "StrictHostKeyChecking no" >> .ssh/config 
-
-# Add a dummy Node server that keeps the Docker container running.  In truth, we
-# will rely on SSH and git to handle authorization, detection, and execution.
-# However, packaging this in a container allows us to provide dependencies that
-# would otherwise be difficult to obtain on the bare machine running CoreOS (CoreOS is notoriously
-# lean and only allows additional software to run within Docker containers).
-RUN pacman -S --noconfirm nodejs
-RUN npm install -g coffee-script
-# RUN echo "http = require 'http'" >> dummy.coffee && \
-#     echo "http.createServer().listen(80)" >> dummy.coffee && \
-#     echo "console.log 'Dummy is online.'" >> dummy.coffee
+RUN echo "Host *" >> root/.ssh/config                     && \
+  echo "  ForwardAgent yes "  >> root/.ssh/config         && \
+  echo "StrictHostKeyChecking no" >> root/.ssh/config     && \
+  echo "UserKnownHostsFile=/dev/null" >> root/.ssh/config
