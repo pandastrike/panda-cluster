@@ -50,12 +50,20 @@ subset = (map_list, key, new_key) ->
   return result
 
 
-# Enforces "fully qualified" form of hostnames.  Idompotent.
+# Enforces "fully qualified" form of hostnames and domains.  Idompotent.
 fully_qualified = (name) ->
   if name[name.length - 1] == "."
     return name
   else
     return name + "."
+
+# This is named somewhat sarcastically.  Enforces "regular" form of hostnames and domains that
+# is more useful to navigating.  Idompotnent.
+regularly_qualified = (name) ->
+  if name[name.length - 1] == "."
+    return name.slice(0, name.length - 1)
+  else
+    return name
 
 # Render underscores and dashes as whitespace.
 plain_text = (string) ->
@@ -131,7 +139,7 @@ poll_until_true = async (func, options, creds, duration, message, max) ->
 
       # Iterate the counter
       count++ if max?
-      return "WARNING: Max iterations reached.  Continuing Anyway."  if count? > max?
+      return "WARNING: Max iterations reached.  Continuing Setup Anyway."  if count? > max?
 
   catch error
     return build_error message, error
@@ -192,10 +200,6 @@ render_formation_service_template = async (config_name, input) ->
 
 # Pulls the most recent AWS CloudFormation template from CoreOS.
 pull_cloud_template = async ({channel, virtualization}) ->
-  # Set reasonable defaults for these preferences.
-  channel ||= "stable"
-  virtualization ||= "pv"
-
   # This directory has a handy CSON file of URLs for CoreOS's latest CloudFormation templates.
   template_store = parse( yield read_file( resolve( __dirname, "cloudformation-templates.cson")))
   template_url = template_store[channel][virtualization]
@@ -264,7 +268,7 @@ build_template = async (options, creds) ->
         Tags: [
           {
             Key: "Name"
-            Value: options.stack_name
+            Value: options.cluster_name
           }
         ]
 
@@ -285,7 +289,7 @@ build_template = async (options, creds) ->
         Tags: [
           {
             Key: "Name"
-            Value: options.stack_name
+            Value: options.cluster_name
           }]
 
     # Add an object specifying the attachment of this Internet Gateway.
@@ -303,7 +307,7 @@ build_template = async (options, creds) ->
         Tags: [
           {
             Key: "Name"
-            Value: options.stack_name
+            Value: options.cluster_name
           }]
 
     # Add an object specifying a Route for public addresses (through the Internet Gateway).
@@ -387,7 +391,7 @@ build_template = async (options, creds) ->
     resources.CoreOSServerLaunchConfig.Properties.AssociatePublicIpAddress = "true"
     # Also give it a Spot Price if the user seeks to keep the cost down.
     if options.spot_price?
-      resources.CoreOSServerLaunchConfig.Properties.SpotPrice = String(options.spot_price)
+      resources.CoreOSServerLaunchConfig.Properties.SpotPrice = options.spot_price
 
     # Modify the object specifying the cluster's auto-scaling group.  Associate with the VPC.
     resources.CoreOSServerAutoScale["DependsOn"] = "ClusterGateway"
@@ -395,7 +399,7 @@ build_template = async (options, creds) ->
     resources.CoreOSServerAutoScale.Properties.AvailabilityZones = ["us-west-1c"]
 
     # Associate the cluster's auto-scaling group with the user-specified tags.
-    if options.tags.length > 0
+    if options.tags? && options.tags.length > 0
       resources.CoreOSServerAutoScale.Properties.Tags = []
       for tag in options.tags
         new_tag = tag
@@ -404,8 +408,6 @@ build_template = async (options, creds) ->
 
     # Place "Resources" back into the JSON template object.
     template_object.Resources = resources
-
-
 
     #----------------------------
     # Cloud-Config Modifications
@@ -433,6 +435,7 @@ build_template = async (options, creds) ->
     return JSON.stringify template_object, null, "\t"
 
   catch error
+    console.log error
     return build_error "Unable to build CloudFormation template.", error
 
 
@@ -451,18 +454,16 @@ set_aws_creds = (creds) ->
 
 
 # Confirm that the named SSH key exists in your AWS account.
-validate_key_pair = async (key_pair, creds) ->
+validate_key_name = async (key_name, creds) ->
   AWS.config = set_aws_creds creds
   ec2 = new AWS.EC2()
   describe_key_pairs = lift_object ec2, ec2.describeKeyPairs
 
   try
     data = yield describe_key_pairs {}
-    names = []
-    names.push key.KeyName    for key in data.KeyPairs
-
-    unless key_pair in names
-      return build_error "This AWS account does not have a key pair named \"#{key_pair}\"."
+    names = pluck data.KeyPairs, "KeyName"
+    unless key_name in names
+      return build_error "This AWS account does not have a key pair named \"#{key_name}\"."
 
     return true # validated
 
@@ -476,7 +477,7 @@ launch_stack = async (options, creds) ->
   try
     # Build the "params" object that is used directly by AWS.
     params = {}
-    params.StackName = options.stack_name
+    params.StackName = options.cluster_name
     params.OnFailure = "DELETE"
     params.TemplateBody = yield build_template options, creds
 
@@ -484,18 +485,16 @@ launch_stack = async (options, creds) ->
     # Parameters is a map of key/values custom defined for this stack by the
     # template file.  We will now fill out the map as specified or with defaults.
     #---------------------------------------------------------------------------
-    options.cluster_size = String(options.cluster_size)     if options.cluster_size?
-
     params.Parameters = [
 
       { # InstanceType
         "ParameterKey": "InstanceType"
-        "ParameterValue": options.instance_type || "m1.medium"
+        "ParameterValue": options.instance_type
       }
 
       { # ClusterSize
         "ParameterKey": "ClusterSize"
-        "ParameterValue": options.cluster_size || "3"
+        "ParameterValue": options.cluster_size
       }
 
       { # DiscoveryURL - Grab a randomized URL from etcd's free discovery service.
@@ -505,11 +504,8 @@ launch_stack = async (options, creds) ->
 
       { # KeyPair
         "ParameterKey": "KeyPair"
-        "ParameterValue": options.key_pair if yield validate_key_pair( options.key_pair, creds)
+        "ParameterValue": options.key_name if yield validate_key_name( options.key_name, creds)
       }
-
-      # AdvertisedIPAddress - uses default "private",    TODO: Add this option
-      # AllowSSHFrom        - uses default "everywhere", TODO: Add this option
     ]
 
     # Preparations complete.  Access AWS.
@@ -533,7 +529,7 @@ get_formation_status = async (options, creds) ->
   describe_events = lift_object cf, cf.describeStackEvents
 
   try
-    data = yield describe_events {StackName: options.stack_name}
+    data = yield describe_events {StackName: options.cluster_name}
 
     if data.StackEvents[0].ResourceType == "AWS::CloudFormation::Stack" &&
     data.StackEvents[0].ResourceStatus == "CREATE_COMPLETE"
@@ -557,7 +553,7 @@ get_cluster_subnet = async (options, creds) ->
   describe_resources = lift_object cf, cf.describeStackResources
 
   params =
-    StackName: options.stack_name
+    StackName: options.cluster_name
     LogicalResourceId: "ClusterSubnet"
 
   try
@@ -577,7 +573,7 @@ get_cluster_vpc_id = async (options, creds) ->
     Filters: [
       Name: "tag:Name"
       Values: [
-        options.stack_name
+        options.cluster_name
       ]
     ]
 
@@ -636,7 +632,7 @@ get_on_demand_instances = async (options, creds) ->
       {
         Name: "tag:aws:cloudformation:stack-name"
         Values: [
-          options.stack_name  # Only examine instances within the stack we just created.
+          options.cluster_name  # Only examine instances within the stack we just created.
         ]
       }
       {
@@ -718,10 +714,9 @@ get_hosted_zone_name = (url) ->
     return build_error "There was an issue parsing the requested hostname.", error
 
 
-# Get the AWS HostedZoneID for the specified domain.
-get_hosted_zone_id = async (hostname, creds) ->
+# Get the AWS HostedZoneID for the provided (fully specified) public domain.
+get_public_zone_id = async (domain, creds) ->
   try
-    hosted_zone = get_hosted_zone_name hostname
     AWS.config = set_aws_creds creds
     r53 = new AWS.Route53()
     list_zones = lift_object r53, r53.listHostedZones
@@ -729,12 +724,11 @@ get_hosted_zone_id = async (hostname, creds) ->
     data = yield list_zones {}
 
     # Dig the ID out of an array, holding an object, holding the string we need.
-    return {
-      zone_name: hosted_zone
-      zone_id: where( data.HostedZones, {Name:hosted_zone})[0].Id
-    }
+    return where( data.HostedZones, {Name:domain})[0].Id
+
 
   catch error
+    console.log error
     return build_error "Unable to access AWS Route 53.", error
 
 
@@ -812,7 +806,7 @@ change_dns_record = async (options, creds) ->
 
     data = yield change_record params
     return {
-      result: build_success "The domain \"#{options.hostname}\" has been assigned to #{options.ip_address}.", data
+      result: build_success "The hostname \"#{options.hostname}\" has been assigned to #{options.ip_address}.", data
       change_id: data.ChangeInfo.Id
     }
 
@@ -850,7 +844,7 @@ add_dns_record = async (options, creds) ->
 
     data = yield change_record params
     return {
-      result: build_success "The domain \"#{options.hostname}\" has been created and assigned to #{options.ip_address}.", data
+      result: build_success "The hostname \"#{options.hostname}\" has been created and assigned to #{options.ip_address}.", data
       change_id: data.ChangeInfo.Id
     }
 
@@ -883,14 +877,14 @@ get_record_change_status = async (change_id, creds) ->
 set_hostname = async (options, creds) ->
   try
     # We need to determine if the requested hostname is currently assigned in a DNS record.
-    {current_ip_address, current_type} = yield get_dns_record( options.hostname, options.public_dns_id, creds)
+    {current_ip_address, current_type} = yield get_dns_record( options.hostname, options.public_zone_id, creds)
 
     if current_ip_address?
       console.log "Changing Current Record."
       # There is already a record.  Change it.
       params =
         hostname: options.hostname
-        zone_id: options.public_dns_id
+        zone_id: options.public_zone_id
         current_ip_address: current_ip_address
         current_type: current_type
         type: "A"
@@ -902,7 +896,7 @@ set_hostname = async (options, creds) ->
       # No existing record is associated with this hostname.  Create one.
       params =
         hostname: options.hostname
-        zone_id: options.public_dns_id
+        zone_id: options.public_zone_id
         type: "A"
         ip_address: options.instances[0].public_ip
 
@@ -914,17 +908,17 @@ set_hostname = async (options, creds) ->
 
 
 
-# Using Private DNS from Route 53, we need to give the cluster a private DNS
+# Using Private DNS from Route 53, we need to give the cluster a private domain
 # so services may be referenced with human-friendly names.
-create_private_hosted_zone = async (options, creds) ->
+create_private_domain = async (options, creds) ->
   try
     AWS.config = set_aws_creds creds
     r53 = new AWS.Route53()
     create_zone = lift_object r53, r53.createHostedZone
 
     params =
-      CallerReference: "caller_rference_#{options.private_hosted_zone}_#{new Date().getTime()}"
-      Name: options.private_hosted_zone
+      CallerReference: "caller_rference_#{options.private_domain}_#{new Date().getTime()}"
+      Name: options.private_domain
       VPC:
         VPCId: options.vpc_id
         VPCRegion: creds.region
@@ -937,6 +931,7 @@ create_private_hosted_zone = async (options, creds) ->
     }
 
   catch error
+    console.log error
     return build_error "Unable to establish the cluster's private DNS.", error
 
 
@@ -976,9 +971,11 @@ prepare_launch_directory = async (options) ->
     for address in pluck( options.instances, "public_ip")
       # Dump the repo's launch directory on the cluster.
       command =
-        "scp -o \"StrictHostKeyChecking no\" -o \"UserKnownHostsFile=/dev/null\" " +
-        "-r #{process.cwd()}/launch/ " +
-        "core@#{address}:/home/core/."
+        "ssh -A -o \"StrictHostKeyChecking no\" -o \"UserKnownHostsFile=/dev/null\" " +
+        "core@#{address} << EOF \n " +
+        "mkdir launch \n" +
+        "EOF"
+
 
       output.push yield execute command
 
@@ -995,8 +992,8 @@ prepare_kick = async (options, creds) ->
   try
     # Add the kick server to the cluster's private DNS records.
     params =
-      hostname: "kick.#{options.private_hosted_zone}"
-      zone_id: options.private_dns_id
+      hostname: "kick.#{options.private_domain}"
+      zone_id: options.private_zone_id
       type: "A"
       ip_address: options.instances[0].private_ip[0]
 
@@ -1020,8 +1017,8 @@ prepare_kick = async (options, creds) ->
     # why we rely on a runtime `sed` command to make it happen while avoiding placing the user
     # credentials in multiple places.  They exist only in the running container and are *NOT*
     # stored in the image.
-    public_dns_id = options.public_dns_id.split("/")[2]
-    private_dns_id = options.private_dns_id.split("/")[2]
+    public_zone_id = options.public_zone_id.split("/")[2]
+    private_zone_id = options.private_zone_id.split("/")[2]
 
     command =
       "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
@@ -1038,16 +1035,16 @@ prepare_kick = async (options, creds) ->
       "sed \"s/aws_region_goes_here/#{creds.region}/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
-      "sed \"s/public_zone_id_goes_here/#{public_dns_id}/g\" < kick.cson > temp && " +
+      "sed \"s/public_zone_id_goes_here/#{public_zone_id}/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
-      "sed \"s/public_zone_name_goes_here/#{options.public_hosted_zone}/g\" < kick.cson > temp && " +
+      "sed \"s/public_zone_name_goes_here/#{options.public_domain}/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
-      "sed \"s/private_zone_id_goes_here/#{private_dns_id}/g\" < kick.cson > temp && " +
+      "sed \"s/private_zone_id_goes_here/#{private_zone_id}/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
-      "sed \"s/private_zone_name_goes_here/#{options.private_hosted_zone}/g\" < kick.cson > temp && " +
+      "sed \"s/private_zone_name_goes_here/#{options.private_domain}/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
       "source ~/.nvm/nvm.sh && nvm use 0.11 && " +
@@ -1072,8 +1069,8 @@ prepare_hook = async (options, creds) ->
   try
     # Add the kick server to the cluster's private DNS records.
     params =
-      hostname: "hook.#{options.private_hosted_zone}"
-      zone_id: options.private_dns_id
+      hostname: "hook.#{options.private_domain}"
+      zone_id: options.private_zone_id
       type: "A"
       ip_address: options.instances[0].private_ip[0]
 
@@ -1216,13 +1213,11 @@ reconcile_specifications = (config, options) ->
   unless config.public_keys?
     config.public_keys = options.public_keys
   unless config.kick_address?
-    phz = options.private_hosted_zone
-    phz = phz.slice(0, phz.length - 1) # Remove trailing "."
-    config.kick_address = "kick.#{phz}:2000"
+    config.kick_address = "kick.#{regularly_qualified options.private_domain}:2000"
 
   # Determine the correct CoreOS environmental variable to apply.
   if config.hostname?
-    if get_hosted_zone_name( config.hostname) == options.public_hosted_zone
+    if get_hosted_zone_name( config.hostname) == options.public_domain
       config.ip_address = "${COREOS_PUBLIC_IPV4}"
     else
       config.ip_address = "${COREOS_PRIVATE_IPV4}"
@@ -1303,32 +1298,25 @@ customize_cluster = async (options, creds) ->
     # Hostname
     #---------------
     # Set the specified hostname to the cluster's IP address.
-    if options.hostname?
-      options.hostname = fully_qualified options.hostname
-      {zone_name, zone_id} = yield get_hosted_zone_id( options.hostname, creds)
-      options.public_hosted_zone = zone_name
-      options.public_dns_id = zone_id
+    options.public_domain = fully_qualified options.public_domain
+    options.public_zone_id = yield get_public_zone_id( options.public_domain, creds)
+    options.hostname = "#{options.cluster_name}.#{options.public_domain}"
 
-      console.log "Registering Cluster in DNS"
-      {result, change_id} = yield set_hostname options, creds
-      data.set_hostname = result
-      dns_changes.hostname = change_id
-    else
-      data.set_hostname = build_success "No hostname specified, using cluster IP Address.", options.instances[0].public_ip
-      options.hostname = options.instances[0].public_ip
+    console.log "Registering Cluster in DNS"
+    {result, change_id} = yield set_hostname options, creds
+    data.set_hostname = result
+    dns_changes.hostname = change_id
 
     #---------------
     # Private DNS
     #---------------
-    # Use a "smart defualt" if neccessary and ensure domain is fully qualified.
-    options.private_hosted_zone ||= "awesome.cluster."
-    options.private_hosted_zone = fully_qualified options.private_hosted_zone
+    options.private_domain = fully_qualified options.private_domain
 
     # Establish a private DNS service available only on the cluster.
-    {result, change_id, zone_id} = yield create_private_hosted_zone options, creds
-    console.log "Private DNS launched: #{options.private_hosted_zone} #{change_id} #{zone_id}"
-    data.launch_private_dns = result
-    options.private_dns_id = zone_id
+    {result, change_id, zone_id} = yield create_private_domain options, creds
+    console.log "Private DNS launched: #{options.private_domain} #{change_id} #{zone_id}"
+    data.launch_private_domain = result
+    options.private_zone_id = zone_id
     data.detect_private_dns_formation = yield poll_until_true get_hosted_zone_status,
       change_id, creds, 5000, "Unable to detect Private DNS formation."
     console.log "Private DNS fully online."
@@ -1367,17 +1355,6 @@ customize_cluster = async (options, creds) ->
      creds, 5000, "Unable to detect Kick registration.", 25
     console.log "Hook Hostname Set"
 
-    #-------------
-    # Githooks
-    #-------------
-    data.githooks = yield install_githooks options
-    console.log "Githooks installed."
-
-    #---------------------------------------------------------------
-    # Service Launch - Launch any listed services into the cluster.
-    #---------------------------------------------------------------
-    data.launch_services = yield launch_services options, creds
-
 
     return build_success "Cluster customizations are complete.", data
   catch error
@@ -1408,9 +1385,42 @@ destroy_cluster = async (params, creds) ->
 module.exports =
 
   # This method creates and starts a CoreOS cluster.
-  create: async (options) ->
+  create_cluster: async (options) ->
     credentials = options.aws
-    credentials.region = options.region || credentials.region
+    credentials.region = options.region || credentials.region  # allows temporary override of default region.
+
+    # Enforce defaults and formatting.
+    options.channel         ||= "stable"
+    options.instance_type   ||= "m1.medium"
+    options.cluster_size    ||= "3"
+    options.virtualization  ||= "pv"
+    options.private_domain  ||= "#{options.cluster_name}.cluster"
+
+    options.cluster_size  = String(options.cluster_size)
+    options.spot_price    = String(options.spot_price)     if options.spot_price?
+
+    options.tags = [
+      {
+        Key: "Name"
+        Value: "DavidTest"
+      }
+      {
+        Key: "customer"
+        Value: "pandastrike"
+      }
+      {
+        Key: "environment"
+        Value: "test"
+      }
+      {
+        Key: "project"
+        Value: "huxley"
+      }
+      {
+        Key: "role"
+        Value: "coreos"
+      }
+    ]
 
     try
       # Make calls to Amazon's API. Gather data as we go.
@@ -1470,16 +1480,14 @@ module.exports =
       return build_error "Apologies. The requested cluster cannot be created.", error
 
 
-
-
   # This method stops and destroys a CoreOS cluster.
-  destroy: async (options) ->
+  destroy_cluster: async (options) ->
     credentials = options.aws
     credentials.region = options.region || credentials.region
 
     # Build the "params" object that is used directly by the "createStack" method.
     params = {}
-    params.StackName = options.stack_name
+    params.StackName = options.cluster_name
 
     #---------------------
     # Access AWS
@@ -1495,3 +1503,16 @@ module.exports =
 
     catch error
       return build_error "Apologies. The targeted cluster has not been destroyed.", error
+
+  # This function launches an app from your local repo into an existing cluster.
+  create_app: async (options) ->
+    #-------------
+    # Githooks
+    #-------------
+    data.githooks = yield install_githooks options
+    console.log "Githooks installed."
+
+    #---------------------------------------------------------------
+    # Service Launch - Launch any listed services into the cluster.
+    #---------------------------------------------------------------
+    data.launch_services = yield launch_services options, creds

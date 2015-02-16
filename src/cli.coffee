@@ -48,65 +48,85 @@ allow_between = (min, max, value, flag) ->
     throw "\nError: Value Is Outside Allowed Range For Flag: #{flag}\n\n"
 
 # Parse the arguments passed to a sub-command.  Construct an "options" object to pass to the main library.
-parse_cli = (command, argv) ->
+parse_cli = (help_path, cmd_def, argv) ->
   # Deliver an info blurb if neccessary.
-  usage command   if argv[0] == "-h" || argv[0] == "help"
+  usage help_path   if argv[0] == "-h" || argv[0] == "help"
 
-  # Begin constructing the "options" object by pulling persistent configuration data
-  # from the Huxley manifest and the CSON file in the user's $HOME directory.  The user's
-  # AWS credentials are kept in the dotfile to be separate and safe from the proejct repository.
-  options = parse( read( resolve( "#{process.cwd()}/huxley.cson")))
-  options.aws = parse( read( resolve("#{process.env.HOME}/.panda-cluster.cson"))).aws
+  # Begin constructing the "options" object by pulling stored configuration data.
+  # (1) The "master" dotfile located in the $HOME directory.  Sensitive AWS credentials are stored there.
+  # (2) A Huxley manifest file that allows the app to self-describe its deployment.
+
+  # This particular command's needs are stored as meta-data in the command's description.
+  {dotfile_master, manifest} = cmd_def[0]
+  if manifest
+    return options = parse( read( resolve( "#{process.cwd()}/huxley.cson")))
+  else
+    options = {}
+
+  if dotfile_master
+    options.aws         = parse( read( resolve("#{process.env.HOME}/.panda-cluster.cson"))).aws
+    options.public_keys = parse( read( resolve("#{process.env.HOME}/.panda-cluster.cson"))).public_keys
 
   # Extract flag data from the argument definition for this sub-command.
-  definitions = parse( read( resolve(  __dirname, "arguments.cson")))
-  cmd_def = definitions[command]  # Produces an array of objects describing this single sub-command.
   flags = pluck cmd_def, "flag"
+  long_flags = pluck cmd_def, "long_flag"
   required_flags = pluck( where( cmd_def, {required: true}), "flag" )
+  required_long_flags = pluck( where( cmd_def, {required: true}), "long_flag" )
 
   # Loop over arguments.  Collect settings into "options" and validate where possible.
   while argv.length > 0
     # Check to see if the entered flag is valid.
-    if flags.indexOf(argv[0]) == -1
-      usage command, "\nError: Unrecognized Flag Provided: #{argv[0]}\n"
+    unless argv[0] in flags || argv[0] in long_flags
+      usage help_path, "\nError: Unrecognized Flag Provided: #{argv[0]}\n"
     # Check to see if there is a "dangling" flag that has no content provided.
     if argv.length == 1
-      usage command, "\nError: Valid Flag Provided But Not Defined: #{argv[0]}\n"
+      usage help_path, "\nError: Valid Flag Provided But Not Defined: #{argv[0]}\n"
 
-    # Validate the argument against its defintion.
-    {name, type, required, allowed_values, min, max} = cmd_def[ flags.indexOf(argv[0]) ]
 
-    allow_only( allowed_values, argv[1], argv[0])  if allowed_values?
-    allow_between( min, max, argv[1], argv[0])     if min? and max?
-    remove( required_flags, argv[0])               if required? == true
+    # Validate the argument against its defintion.  Identify the flag.
+    if argv[0] in flags
+      command = where cmd_def, {flag: argv[0]}
+    else
+      command = where cmd_def, {long_flag: argv[0]}
+
+    # Pull its specification.
+    {name, type, required, allowed_values, min, max} = command[0]
+
+    # Remove flags from check-list if required.
+    if required? == true
+      remove required_flags, command[0].flag
+      remove required_long_flags, command[0].long_flag
+
+    allow_only( allowed_values, argv[1], argv[0])                     if allowed_values?
+    allow_between( min, max, argv[1], argv[0])                        if min? and max?
 
     # Add data to the "options" object.
-    options[name] = argv[1]
+    if type? == "json"
+      options[name] = argv[1]
+    if type? == "boolean"
+      options[name] = true
+    else
+      options[name] = argv[1]
 
     # Delete these two arguments.
     argv = argv[2..]
 
   # Done looping.  Check to see if all required flags have been defined.
   unless required_flags.length == 0
-    usage command, "\nError: Mandatory Flag(s) Remain Undefined: #{required_flags}\n"
+    usage help_path, "\nError: Mandatory Flag(s) Remain Undefined: #{required_flags}\n"
 
   # Parsing complete. Return the completed "options" object.
   return options
 
 
-# We must finalize the array "options.formation_units".  This
-# variable is an array of objects detailing which services are launched during
-# cluster formation.  The list of all available units is in "src/formation-services/formation-units.cson"
-gather_formation_units = (options) ->
-  unit_hash = parse( read( resolve(__dirname, "formation-services/formation-units.cson")))
+# If the user requests to mount additional drives for their Docker containers, they
+# set the "-m" flag.  For now, we specify the default configurations to keep thing simple.
+add_formation_units = (options) ->
+  options.formation_service_templates =
+    format_ephemeral: "default"
+    var_lib_docker: "default"
 
-  # Build array.
-  units = []
-  for key of unit_hash
-    units.push unit_hash[key]   if options[key]?
-
-  # Alleviate possible array nesting with shallow flattening.
-  return flatten units, true
+  return options
 
 #===============================================================================
 # Main - Top-Level Command-Line Interface
@@ -114,19 +134,31 @@ gather_formation_units = (options) ->
 # Chop off the argument array so that only the useful arguments remain.
 argv = argv[2..]
 
-# Deliver an info blurb if neccessary.
+
 if argv.length == 0 || argv[0] == "-h" || argv[0] == "help"
   usage "main"
 
-# Now, look for the specified sub-command.
-switch argv[0]
-  when "create"
-    options = parse_cli "create", argv[1..]
-    #options.formation_units = gather_formation_units options
-    PC.create options
-  when "destroy"
-    options = parse_cli "destroy", argv[1..]
-    PC.destroy options
+# Begin parsing.  Start by loading the argument definitions so we can start matching.
+definition = parse( read( resolve(  __dirname, "arguments.cson")))
+
+# Search the top-level commands
+if argv[0] of definition
+  # Passed.  Now match among its sub-commands.
+
+  if argv.length == 1 || argv[1] == "-h" || argv[1] == "help"
+    # Deliver an info blurb if neccessary.
+    usage "#{argv[0]}/main"
+  else if argv[1] of definition[argv[0]]
+    # Passed.  Now parse the sub-command arguments and contstruct the configuration object "options."
+    cmd_def = definition[argv[0]][argv[1]]
+    options = parse_cli "#{argv[0]}/#{argv[1]}", cmd_def, argv[2..]
+    options = add_formation_units options     if options.formation_service_templates == "true"
+    # Success. Launch the appropriate function.
+    PC["#{argv[1]}_#{argv[0]}"] options
   else
-    # When the command cannot be identified, display the help guide.
-    usage "main", "\nError: Command Not Found: #{argv[0]} \n"
+    # When the sub-command cannot be identified, display the help guide.
+    usage "#{argv[0]}/main", "\n Error: Command Not Found: #{argv[1]} \n"
+
+else
+  # When the top-level command cannot be identified, display the help guide.
+  usage "main", "\nError: Command Not Found: #{argv[0]} \n"
