@@ -42,7 +42,6 @@ module.exports =
     while true
       {data} = (yield cluster.get())
       {cluster_status} = yield data
-      console.log "*****current cluster_status: ", cluster_status.message
       if(cluster_status.message == "The cluster is confirmed to be online and ready.")
         return cluster_status # The cluster formation complete.
       else
