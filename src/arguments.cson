@@ -91,15 +91,21 @@ cluster:
     }
   ]
 
-  destroy:[
+  delete:[
     {
-      name: "stack_name"
+      dotfile_master: true
+      manifest: false
+    }
+    {
+      name: "cluster_name"
       flag: "-n"
+      long_flag: "--name"
       required: true
     }
     {
       name: "region"
       flag: "-r"
+      long_flag: "--region"
       allowed_values: ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2",
       "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1",
       "us-west-2"]

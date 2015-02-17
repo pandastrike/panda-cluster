@@ -14,4 +14,4 @@ automating the necessary commands.
 
 Sub-Commands:
    create
-   destroy
+   delete
