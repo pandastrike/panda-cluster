@@ -9,8 +9,9 @@ You must have a ~/.pandaconfig.cson file with the correct key value pairs.
 
 An example configuration file is detailed on the [GitHub repo](https://github.com/pandastrike/panda-cluster/tree/feature/refactor-to-sketch)
 
-
+-----------------------------------------------
 Commands:
+-----------------------------------------------
   cluster
     create                 Spins up a cluster of the requested size using your AWS access.
     delete                 Terminates the specified cluster.
@@ -19,7 +20,9 @@ Commands:
     create                 Creates user account.
 
 
+-----------------------------------------------
 Example:
+-----------------------------------------------
 
   `huxley-cli user create`
   User create returns an account-specific secret_token.
