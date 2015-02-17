@@ -26,29 +26,17 @@ module.exports = async ->
     create: async ({respond, url, data}) ->
       data = (yield data)
       cluster_url = make_key()
-      {cluster_name, email, secret_token, key_pair, public_keys} = data
+      {stack_name, cluster_name, email, secret_token, key_pair, public_keys} = data
       user = yield users.get email
 
       if user && data.secret_token == user.secret_token
         cluster_entry =
           email: email
           url: cluster_url
-          name: cluster_name
+          name: cluster_name || stack_name
         cluster_res = yield clusters.put cluster_url, cluster_entry
 
-        # FIXME: deep copy this bad boy
-        #create_request = deep_copy user
-
-        create_request = user
-        console.log "*****data sent in create: ", data
-        console.log "*****user sent in create: ", user
-        #create_request.stack_name = cluster_name
-
-        # FIXME: removed yield in clusters.create
-        #res = pandacluster.create create_request
         res = pandacluster.create data
-        # FIXME: delete field because "create_request = user" is shallow copy
-        delete create_request.stack_name
         respond 201, "", {location: (url "cluster", {cluster_url})}
       else
         respond 401, "invalid email or token"
@@ -57,17 +45,22 @@ module.exports = async ->
 
     # FIXME: pass in secret token in auth header
     delete: async ({respond, match: {path: {cluster_url}}, request: {headers: {authorization}}}) ->
+      console.log "*****hitting delete in handlers"
       cluster = yield clusters.get cluster_url
+      console.log "*****retrieved cluster: ", cluster
+      console.log 0
       {email, name} = cluster
       user = yield users.get email
       # FIXME: validate secret token
       #if user && secret_token == user.secret_token
+      console.log 1
       if user
         request_data =
           aws: user.aws
           stack_name: name
         clusters.delete cluster_url
         # FIXME: removed yield in clusters.delete
+        console.log "*****delete request_data: ", request_data
         pandacluster.destroy request_data
       else
         respond 401, "invalid email or token"

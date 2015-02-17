@@ -1,0 +1,12 @@
+
+
+coffee --nodejs --harmony cli.coffee create_user
+
+
+coffee --nodejs --harmony cli.coffee create_cluster -t JzRYxD6lI4Y9N98Ju3bTBA
+
+
+coffee --nodejs --harmony cli.coffee wait_on_cluster -c ajNuwXGqPSrssVHXaczf2g -t t0lD2eVhAAdluXTvHM_JRA
+
+
+coffee --nodejs --harmony cli.coffee delete_cluster -c 9VGpFtKIHDVp0b6n62GPaQ -t JzRYxD6lI4Y9N98Ju3bTBA

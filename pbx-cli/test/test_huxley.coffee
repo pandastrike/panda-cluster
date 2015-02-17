@@ -50,11 +50,11 @@ amen.describe "Huxley API", (context) ->
 #      console.log "*****cluster_status: ", cluster_status
 #      assert.ok cluster_status
 
-#      cluster_status =
-#        (yield pbx.wait_on_cluster {cluster_url, secret_token, url})
-#
-#      console.log "*****cluster_status is done: ", cluster_status
-#      assert.ok cluster_status
+      cluster_status =
+        (yield pbx.wait_on_cluster {cluster_url, secret_token, url})
+
+      console.log "*****cluster_status is done: ", cluster_status
+      assert.ok cluster_status
 
       context.test "Delete a cluster", ->
         url = pandaconfig.url

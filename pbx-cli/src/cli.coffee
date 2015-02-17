@@ -4,7 +4,6 @@
 # This file specifies the Command-Line Interface for PandaCluster.  When used as
 # a command-line tool, we still call PandaCluster functions, but we have to build
 # the "options" object for each method by parsing command-line arguments.
-
 #===============================================================================
 # Modules
 #===============================================================================
@@ -32,9 +31,9 @@ is_integer = (value) -> parseInt(value, 10) != NaN
 # Output an Info Blurb and optional message.
 usage = (entry, message) ->
   if message?
-    throw "#{message}\n" + read( resolve( __dirname, "../..", "doc", entry ) )
+    throw "#{message}\n" + read( resolve( __dirname, "../", "docs", entry ) )
   else
-    throw read( resolve( __dirname, "..", "doc", entry ) )
+    throw read( resolve( __dirname, "..", "docs", entry ) )
 
 # Accept only the allowed values for flags that take an enumerated type.
 allow_only = (allowed_values, value, flag) ->
@@ -86,6 +85,8 @@ parse_cli = (command, argv) ->
     # Delete these two arguments.
     argv = argv[2..]
 
+  options
+
   # Done looping.  Check to see if all required flags have been defined.
   unless required_flags.length == 0
     usage command, "\nError: Mandatory Flag(s) Remain Undefined: #{required_flags}\n"
@@ -109,18 +110,39 @@ if argv.length == 0 || argv[0] == "-h" || argv[0] == "help"
 call ->
   try
     switch argv[0]
-      when "create_cluster"
-        options = parse_cli "create", argv[1..]
-        res = (yield PC.create_cluster options)
-        console.log res
-      when "delete_cluster"
-        options = parse_cli "destroy", argv[1..]
-        res = (yield PC.delete_cluster options)
-        console.log res
-      when "create_user"
-        options = parse_cli "destroy", argv[1..]
-        res = (yield PC.create_user options)
-        console.log res
+
+      when "cluster"
+        switch argv[1]
+          when "create"
+            options = parse_cli "create_cluster", argv[2..]
+            console.log "*****cluster create args: ", options
+            res = (yield PC.create_cluster options)
+            console.log "*****cluster create results: ", res
+          when "delete"
+            options = parse_cli "delete_cluster", argv[2..]
+            console.log "*****cluster delete args: ", options
+            res = (yield PC.delete_cluster options)
+            console.log "*****cluster delete results: ", res
+          when "wait"
+            options = parse_cli "wait_on_cluster", argv[2..]
+            console.log "*****waiting on cluster args: ", options
+            res = (yield PC.wait_on_cluster options)
+            console.log "*****cluster wait results: ", res
+          else
+            # When the command cannot be identified, display the help guide.
+            usage "main", "\nError: Command Not Found: #{argv[1]} \n"
+
+      when "user"
+        switch argv[1]
+          when "create"
+            options = parse_cli "create_user", argv[2..]
+            console.log "*****user create args: ", options
+            res = (yield PC.create_user options)
+            console.log "*****user create results: ", res
+          else
+            # When the command cannot be identified, display the help guide.
+            usage "main", "\nError: Command Not Found: #{argv[1]} \n"
+
       else
         # When the command cannot be identified, display the help guide.
         usage "main", "\nError: Command Not Found: #{argv[0]} \n"

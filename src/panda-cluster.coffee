@@ -474,6 +474,7 @@ launch_stack = async (options, creds) ->
   try
     # Build the "params" object that is used directly by AWS.
     params = {}
+    console.log "*****THIS stackname: ", options.stack_name
     params.StackName = options.stack_name
     params.OnFailure = "DELETE"
     params.TemplateBody = yield build_template options, creds

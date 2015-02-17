@@ -22,6 +22,12 @@ module.exports =
       #(yield clusters.create {cluster_name, email, secret_token})
     location
 
+  delete_cluster: async ({cluster_url, secret_token, url}) ->
+
+    api = (yield discover url)
+    cluster = (api.cluster cluster_url)
+    result = (yield cluster.delete())
+
   get_cluster_status: async ({cluster_url, secret_token, url}) ->
 
     api = (yield discover url)
@@ -50,8 +56,3 @@ module.exports =
     {data} = (yield users.create {aws, email, key_pair, public_keys})
     data = (yield data)
 
-  delete_cluster: async ({cluster_url, secret_token, url}) ->
-
-    api = (yield discover url)
-    cluster = (api.cluster cluster_url)
-    result = (yield cluster.delete())
