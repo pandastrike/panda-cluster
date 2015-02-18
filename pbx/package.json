@@ -23,6 +23,9 @@
     "pirate": "git://github.com/pandastrike/pirate.git#57d404"
   },
   "dependencies": {
+    "amen": "^1.0.0-alpha-03",
+    "js-yaml": "^3.2.5",
+    "pirate": "git://github.com/pandastrike/pirate.git#57d404",
     "fairmont": "^0.8.2",
     "jsck": "^0.2.1",
     "routington": "^1.0.2",
