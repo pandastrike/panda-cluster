@@ -49,41 +49,46 @@ module.exports = async ->
       console.log "*****hitting delete in handlers"
       cluster = yield clusters.get cluster_url
       console.log "*****retrieved cluster: ", cluster
-      console.log 0
-      {email, name} = cluster
-      user = yield users.get email
-      # FIXME: validate secret token
-      #if user && secret_token == user.secret_token
-      console.log 1
-      if user
-        request_data =
-          aws: user.aws
-          cluster_name: name
-        clusters.delete cluster_url
-        # FIXME: removed yield in clusters.delete
-        console.log "*****delete request_data: ", request_data
-        pandacluster.delete_cluster request_data
+      if cluster
+        {email, name} = cluster
+        user = yield users.get email
+        # FIXME: validate secret token
+        #if user && secret_token == user.secret_token
+        if user
+          request_data =
+            aws: user.aws
+            cluster_name: name
+          clusters.delete cluster_url
+          # FIXME: removed yield in clusters.delete
+          console.log "*****delete request_data: ", request_data
+          pandacluster.delete_cluster request_data
+          respond 200, "cluster #{name} is being processed for deletion"
+        else
+          respond 401, "invalid email or token"
       else
-        respond 401, "invalid email or token"
+        respond 404, "cluster not found"
 
     get: async ({respond, match: {path: {cluster_url}}, request: {headers: {authorization}}}) ->
       clusters = (yield clusters)
       cluster = (yield clusters.get cluster_url)
-      console.log "*****get cluster: ", cluster
-      {email} = cluster
-      user = yield users.get email
-      # FIXME: validate secret token
-      #if user && secret_token == user.secret_token
-      if user
-        request_data =
-          aws: user.aws
-          cluster_name: cluster.name
-        console.log "*****pandacluster: ", pandacluster
-        cluster_status = yield pandacluster.get_cluster_status request_data
-        console.log "*****cluster_status: ", cluster_status
-        respond 200, {cluster_status}
+      if cluster
+        console.log "*****get cluster: ", cluster
+        {email} = cluster
+        user = yield users.get email
+        # FIXME: validate secret token
+        #if user && secret_token == user.secret_token
+        if user
+          request_data =
+            aws: user.aws
+            cluster_name: cluster.name
+          console.log "*****pandacluster: ", pandacluster
+          cluster_status = yield pandacluster.get_cluster_status request_data
+          console.log "*****cluster_status: ", cluster_status
+          respond 200, {cluster_status}
+        else
+          respond 401, "invalid email or token"
       else
-        respond 401, "invalid email or token"
+        respond 404, "cluster not found"
 
   users:
 
