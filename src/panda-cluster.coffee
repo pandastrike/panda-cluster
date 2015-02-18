@@ -456,7 +456,7 @@ build_template = async (options, creds) ->
         cloud_config = yield add_unit cloud_config, x, options.formation_service_templates[x]
 
     # Add the specified public keys.  We must be careful with indentation formatting.
-    unless options.public_keys == [] || options.public_keys == null
+    unless !options.public_keys || options.public_keys == []
       cloud_config.push "ssh_authorized_keys: \n"
       for x in options.public_keys
         cloud_config.push "  - #{x}\n"
@@ -1493,3 +1493,8 @@ module.exports =
 
     catch error
       return build_error "Apologies. The targeted cluster has not been destroyed.", error
+
+   get_cluster_status: async (options) ->
+       credentials = options.aws
+       credentials.region = options.region || credentials.region
+       yield get_formation_status options, credentials
