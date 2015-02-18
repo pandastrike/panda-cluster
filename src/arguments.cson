@@ -1,0 +1,187 @@
+#===============================================================================
+# PandaCluster - Sub-Command Argument Definitions
+#===============================================================================
+# This CSON object specifies arugments for each sub-command of the Command-Line Interface.
+# Each object returns an array of objects define values needed by the parsing function.
+
+# hostname -> name + public_domain
+# private_hosted_zone -> private_domain
+# key_pair -> key_name
+
+cluster:
+  create:[
+    {
+      dotfile_master: true
+      manifest: false
+    }
+    {
+      name: "channel"
+      flag: "-c"
+      long_flag: "--channel"
+      allowed_values: ["alpha", "beta", "stable"]
+    }
+    {
+      name: "public_domain"
+      flag: "-d"
+      long_flag: "--public-domain"
+      required: true
+    }
+    {
+      name: "instance_type"
+      flag: "-i"
+      long_flag: "--instance-type"
+      allowed_values: [ "c1.medium", "c1.xlarge", "c3.large", "c3.xlarge", "c3.2xlarge",
+      "c3.4xlarge", "m1.medium", "m1.large", "m1.xlarge", "m2.xlarge", "m2.2xlarge",
+      "m2.4xlarge", "m3.large", "m3.xlarge", "m3.2xlarge"]
+    }
+    {
+      name: "key_name"
+      flag: "-k"
+      long_flag: "--key-name"
+      required: true
+    }
+    {
+      name: "formation_service_templates"
+      flag: "-m"
+      long_flag: "--formation-service-templates"
+      type: "boolean"
+    }
+    {
+      name: "cluster_name"
+      flag: "-n"
+      long_flag: "--name"
+      required: true
+    }
+    {
+      name: "spot_price"
+      flag: "-o"
+      long_flag: "--spot-price"
+    }
+    {
+      name: "private_domain"
+      flag: "-p"
+      long_flag: "--private-domain"
+    }
+    {
+      name: "region"
+      flag: "-r"
+      long_flag: "--region"
+      allowed_values: ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2",
+      "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1",
+      "us-west-2"]
+    }
+    {
+      name: "cluster_size"
+      flag: "-s"
+      long_flag: "--size"
+      min: 3
+      max: 12
+    }
+    {
+      name: "tags"
+      flag: "-t"
+      long_flag: "--tags"
+      type: "json"
+    }
+    {
+      name: "virtualization"
+      flag: "-v"
+      long_flag: "--virtualization"
+      allowed_values: ["pv", "hvm"]
+    }
+  ]
+
+  delete:[
+    {
+      dotfile_master: true
+      manifest: false
+    }
+    {
+      name: "cluster_name"
+      flag: "-n"
+      long_flag: "--name"
+      required: true
+    }
+    {
+      name: "region"
+      flag: "-r"
+      long_flag: "--region"
+      allowed_values: ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2",
+      "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1",
+      "us-west-2"]
+    }
+  ]
+
+# app:
+#   create: [
+#     {
+#       dotfile_master: true
+#       manifest: false
+#     }
+#     {
+#       name: "cluster_name"
+#       flag: "-c"
+#       long_flag: "--cluster-name"
+#       required: true
+#     }
+#     {
+#       name: "public_domain"
+#       flag: "-d"
+#       long_flag: "--public-domain"
+#       required: true
+#     }
+#     {
+#       name: "app_name"
+#       flag: "-n"
+#       long_flag: "--app-name"
+#       required: true
+#     }
+#     {
+#       name: "region"
+#       flag: "-r"
+#       long_flag: "--region"
+#       allowed_values: ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2",
+#       "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1",
+#       "us-west-2"]
+#     }
+#   ]
+#   delete: [
+#     {
+#       dotfile_master: true
+#       manifest: true
+#     }
+#     {
+#       name: "cluster_name"
+#       flag: "-c"
+#       long_flag: "--cluster-name"
+#       required: true
+#     }
+#     {
+#       name: "app_name"
+#       flag: "-n"
+#       long_flag: "--app-name"
+#       required: true
+#     }
+#     {
+#       name: "region"
+#       flag: "-r"
+#       long_flag: "--region"
+#       allowed_values: ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2",
+#       "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1",
+#       "us-west-2"]
+#     }
+#   ]
+#   push: [
+#     {
+#       dotfile_master: true
+#       manifest: true
+#     }
+#     {
+#       name: "region"
+#       flag: "-r"
+#       long_flag: "--region"
+#       allowed_values: ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2",
+#       "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1",
+#       "us-west-2"]
+#     }
+#   ]
