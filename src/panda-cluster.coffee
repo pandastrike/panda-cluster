@@ -1270,167 +1270,6 @@ prepare_hook = async (options, creds) ->
     return build_error
 
 
-
-# This helper function renders templates of githook scripts according the user's specifications.
-# This is done via MustacheJS, just like we do with the *.service files.
-render_githook_template = async (type, options) ->
-  path_to_template = resolve __dirname, "githooks/#{type}.template"
-
-  input =
-    repo_name: options.repo_name
-    hostname: options.hostname
-    restart: options.restart
-
-  content = yield simple_render input, path_to_template
-  path = resolve __dirname, "githooks/temp"
-  yield write_file path, content
-
-
-# This function connects to the cluster's git-based-webhook (hook) server and sets up initial
-# repos and githooks. (arbitrary scripts triggered by git commands)
-install_githooks = async (options) ->
-  output = {}
-  try
-    # Assume that the directory panda-cluster is being executed in is the name of the repo being deployed.
-    repo_name = process.cwd().split("/")
-    repo_name = repo_name[repo_name.length - 1]
-    options.repo_name = repo_name
-
-    # SSH to the hook server and setup a "bare" repository.   If the directory already exists, overwrite it.
-    command =
-      "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
-      "-p 3000 root@#{options.hostname} << EOF\n" +
-      "mkdir repos && cd repos \n" +
-      "mkdir #{repo_name}.git && cd #{repo_name}.git \n" +
-      "/usr/bin/git init --bare \n" +
-      "EOF"
-
-    output.initiate = yield execute command
-
-
-    # Now add a "huxley" alias for this remote repo to the local git repo.  This is given as two separate
-    # commands because it's okay if the first one fails.
-    output.alias_1 = yield execute "git remote rm  huxley "
-    output.alias_2 = yield execute "git remote add huxley ssh://root@#{options.hostname}:3000/root/repos/#{repo_name}.git"
-
-
-    # Now, push our repo to the hook server to get us started.  This also allows containers on the cluster to draw
-    # from the hook-server during start-up. This removes the need for public repos or GitHub credentials.
-    output.first_push = yield execute "git push huxley HEAD"
-
-
-    # Render the "restart" githook that will be eventually labeled "post-receive"
-    # and used for continuous integration.
-    yield render_githook_template "restart", options
-
-    # Place this "temp" file into the hook-server as post-receive.
-    command =
-      "scp -o \"StrictHostKeyChecking no\" -o \"UserKnownHostsFile=/dev/null\" " +
-      "-P 3000 #{__dirname}/githooks/temp " +
-      "root@#{options.hostname}:repos/#{repo_name}.git/hooks/post-receive"
-
-    output.place_hook = yield execute command
-
-    # And finally, make this script executable so git commands trigger it.
-    command =
-      "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
-      "-p 3000 root@#{options.hostname} << EOF\n" +
-      "cd repos/#{repo_name}.git/hooks \n" +
-      "chmod +x post-receive"
-
-    output.chmod = yield execute command, true
-    return build_success "Githooks installed successfully.", output
-
-  catch error
-    console.log error
-    return build_error "Unable to install githooks.", error
-
-
-
-
-
-# This function merges the specifications of a single template with "common data",
-# like public SSH keys.  This keeps the user from having to specify data redudantly.
-# However, this merge is overriden if the user specifies one of the keys that is auto-handled.
-reconcile_specifications = (config, options) ->
-  # Add shared data to this section of the template as a default.
-  unless config.public_keys?
-    config.public_keys = options.public_keys
-  unless config.kick_address?
-    config.kick_address = "kick.#{regularly_qualified options.private_domain}:2000"
-
-  # Determine the correct CoreOS environmental variable to apply.
-  if config.hostname?
-    if get_hosted_zone_name( config.hostname) == options.public_domain
-      config.ip_address = "${COREOS_PUBLIC_IPV4}"
-    else
-      config.ip_address = "${COREOS_PRIVATE_IPV4}"
-
-  return config
-
-# Helper function to determine the source of a given service file.  Are they coming from
-# the panda-cluster library, or are they custom user services. Thankfully, we can tell pretty
-# easily because panda-cluster services are prefixed with "pc-".
-get_root_directory = (name) ->
-  name = dashed plain_text name
-  split_name = name.split "-"
-
-  if split_name[0] == "pc"
-    return __dirname
-  else
-    return process.cwd()
-
-# Helper function that places a rendered service template on the cluster.
-place_service_unit = async (name, hostname, root_directory) ->
-  name = dashed plain_text name
-  # Place a copy of the customized unit file on the cluster.
-  command =
-    "scp -o \"StrictHostKeyChecking no\" -o \"UserKnownHostsFile=/dev/null\" " +
-    "-r #{root_directory}/launch/#{name} " +
-    "core@#{hostname}:/home/core/launch"
-
-  yield execute command
-
-# Helper function that launches a single unit located on the cluster.
-launch_service_unit = async (name, hostname) ->
-  try
-    name = dashed plain_text name
-
-    command =
-      "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
-      "core@#{hostname} << EOF\n" +
-      "fleetctl start launch/#{name}/#{name}.service \n" +
-      "EOF"
-
-    return build_success "Service #{name} launched.", yield execute command
-
-  catch error
-    console.log error
-    return build_error "Unable to launch service unit.", error
-
-
-# Launch all services listed in the config file.
-launch_services = async (options, creds) ->
-  try
-    for unit of options.service_templates
-      console.log "Launching #{unit}"
-      config = options.service_templates[unit]
-
-      # We wish to only render templates for units that have variables specified.
-      if config != null
-        config = reconcile_specifications config, options
-        root_directory = get_root_directory unit
-        yield render_service_template unit, config, root_directory
-        yield place_service_unit unit, options.hostname, root_directory
-
-      # Launch into the cluster.
-      yield launch_service_unit unit, options.hostname
-
-  catch error
-    console.log error
-    return build_error "Unable to install hook-server into cluster.", error
-
-
 # After cluster formation is complete, launch a variety of services
 # into the cluster from a library of established unit-files and AWS commands.
 customize_cluster = async (options, creds) ->
@@ -1554,6 +1393,8 @@ delete_stack = async (options, creds) ->
 
 
 
+
+
 #===============================
 # PandaCluster Definition
 #===============================
@@ -1652,21 +1493,3 @@ module.exports =
 
     catch error
       return build_error "Apologies. The targeted cluster has not been destroyed.", error
-
-
-  #==================
-  # App Functions
-  #==================
-
-  # This function launches an app from your local repo into an existing cluster.
-  create_app: async (options) ->
-    #-------------
-    # Githooks
-    #-------------
-    data.githooks = yield install_githooks options
-    console.log "Githooks installed."
-
-    #---------------------------------------------------------------
-    # Service Launch - Launch any listed services into the cluster.
-    #---------------------------------------------------------------
-    data.launch_services = yield launch_services options, creds

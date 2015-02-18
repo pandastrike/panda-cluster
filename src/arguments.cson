@@ -111,3 +111,77 @@ cluster:
       "us-west-2"]
     }
   ]
+
+# app:
+#   create: [
+#     {
+#       dotfile_master: true
+#       manifest: false
+#     }
+#     {
+#       name: "cluster_name"
+#       flag: "-c"
+#       long_flag: "--cluster-name"
+#       required: true
+#     }
+#     {
+#       name: "public_domain"
+#       flag: "-d"
+#       long_flag: "--public-domain"
+#       required: true
+#     }
+#     {
+#       name: "app_name"
+#       flag: "-n"
+#       long_flag: "--app-name"
+#       required: true
+#     }
+#     {
+#       name: "region"
+#       flag: "-r"
+#       long_flag: "--region"
+#       allowed_values: ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2",
+#       "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1",
+#       "us-west-2"]
+#     }
+#   ]
+#   delete: [
+#     {
+#       dotfile_master: true
+#       manifest: true
+#     }
+#     {
+#       name: "cluster_name"
+#       flag: "-c"
+#       long_flag: "--cluster-name"
+#       required: true
+#     }
+#     {
+#       name: "app_name"
+#       flag: "-n"
+#       long_flag: "--app-name"
+#       required: true
+#     }
+#     {
+#       name: "region"
+#       flag: "-r"
+#       long_flag: "--region"
+#       allowed_values: ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2",
+#       "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1",
+#       "us-west-2"]
+#     }
+#   ]
+#   push: [
+#     {
+#       dotfile_master: true
+#       manifest: true
+#     }
+#     {
+#       name: "region"
+#       flag: "-r"
+#       long_flag: "--region"
+#       allowed_values: ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2",
+#       "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1",
+#       "us-west-2"]
+#     }
+#   ]

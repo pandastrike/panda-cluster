@@ -9,9 +9,6 @@ allowing it to understand and gracefully manipulate clusters running in your AWS
 "cluster create" generates a cluster of CoreOS machines using your AWS account.
 Each comes equipped with a private DNS and sidekick support servers.
 
-Configuration details may be provided either via the huxley.cson manifest file
-or flags on the command line.
-
 Required:
   -d  (public_domain) The name of the public hosted zone that routes the Internet to your cluster.
         You must own this domain.
