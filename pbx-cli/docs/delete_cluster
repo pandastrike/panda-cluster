@@ -1,8 +1,13 @@
 -----------------------------------------------------------------
-Usage: pandacluster destroy CLUSTER_NAME
+Usage: huxley-cli delete_cluster -t SECRET_TOKEN -c CLUSTER_ID
 -----------------------------------------------------------------
 Follow any command with "help" for more information.
 
 Terminates the specified CoreOS cluster on Amazon's EC2 cloud service and deletes
-its cloud stack.  This sub-command is pretty straight-forward and takes no options
- other than the target name.
+its cloud stack.
+
+Required:
+    -t  Secret Token.  This is returned upon initial user creation.
+
+    -c  Cluster ID.  This is the unique, generated 64 bit returned upon intial 
+        account creation.
