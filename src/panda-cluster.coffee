@@ -1191,7 +1191,6 @@ prepare_kick = async (options, creds) ->
       "sed \"s/private_zone_name_goes_here/#{options.private_domain}/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
-      "source ~/.nvm/nvm.sh && nvm use 0.11 && " +
       "coffee --nodejs --harmony kick.coffee\" \n" +
       "EOF"
 
@@ -1255,6 +1254,7 @@ prepare_hook = async (options, creds) ->
       "ssh-keygen -f /etc/ssh/ssh_host_dsa_key -N ''      && " +
       "ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key -N ''    && " +
       "ssh-keygen -f /etc/ssh/ssh_host_ed25519_key -N ''  && " +
+      "mkdir /root/repos && " +
       "/usr/sbin/sshd -e -o 'UsePAM no' && " +
       "git daemon --port=80 --base-path=/root --export-all \"\n" +
       "EOF"

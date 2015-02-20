@@ -25,6 +25,12 @@ Required:
 
 --------------------------------------------------------------------------------
 Optional:
+  -c  (channel)  The CoreOS channel that gets loaded in the instance.  There are three channels,
+        where "stable" is the most battle tested, and "alpha" is the most advanced.
+
+        Allowed Values:
+        "alpha", "beta", "stable"
+
   -i  (instance_type)  Instance type on EC2. (Default = "m3.medium")  All machines in the cluster
         are of the same type.
 
@@ -35,6 +41,15 @@ Optional:
         "m2.xlarge", "m2.2xlarge", "m2.4xlarge",
         "m3.large", "m3.xlarge", "m3.2xlarge"
 
+  -m (formation_service_templates)  This activates CoreOS services that request additional, ephmeral
+       storage for your instances.  The Docker host is mounted to this drive, giving your containers
+       more disk space.  The amount of space you have depends on the instance size.  See Amazon
+       documentation for more details
+
+  -o  (spot_price)  This is the upper limit you are willing to pay for an EC2 spot instance. When
+       prices rise above this value, your instance is terminated.  However, it is possible to
+       utilize instances for up to 90% cheaper than guaranteed instances.  Great for testing.
+
   -r  (region) AWS Region.  Your default region is set with the your AWS credentials, but you
         may temporarily override that region for this command.
 
@@ -44,3 +59,10 @@ Optional:
 
   -s  (cluster_size) Size of cluster. (Default = 3) Clusters must have between 3 and 12
         machines, inclusive.
+
+  -v  (virtualization)  The type of virtualization to use in your instance.  There are two types,
+        para-virtualization (pv) is more common and has better performance, however hardware virtual
+        machine (hvm) is more reliable.
+
+        Allowed Values:
+        "pv", "hvm"
