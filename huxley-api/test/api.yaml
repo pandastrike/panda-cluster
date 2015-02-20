@@ -1,10 +1,10 @@
 mappings:
-  blog:
-    template: "/blog/:key"
-    resource: blog
   blogs:
     path: /blogs
     resource: blogs
+  blog:
+    template: "/blog/:key"
+    resource: blog
   post:
     template: "/blog/:key/:index"
     resource: post
@@ -41,7 +41,7 @@ resources:
         method: DELETE
         response:
           status: 200
-      create:
+      post:
         description: Creates a post resource whose URL will be returned in the location header
         method: POST
         request:

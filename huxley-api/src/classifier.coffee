@@ -1,9 +1,24 @@
-validator = require "./validator"
 errors = require "./errors"
+JSCK = require("jsck").draft3
 
 # TODO: make this more sophisticated
 acceptable = (header, definition) ->
   header == "*/*" || header == definition
+
+validator = (schema) ->
+  if schema?
+    validator = (new JSCK {properties: schema})
+    (object) ->
+      {valid} = validator.validate object
+      valid
+  else
+    (object) ->
+      # handle null, undefined, or {}
+      # to mean 'empty query string'
+      unless object?
+        true
+      else
+        Object.keys(object).length == 0
 
 module.exports = (api) ->
 

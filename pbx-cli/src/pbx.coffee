@@ -19,7 +19,6 @@ module.exports =
     clusters = (api.clusters)
     {response: {headers: {location}}}  =
       (yield clusters.create args)
-      #(yield clusters.create {cluster_name, email, secret_token})
     location
 
   delete_cluster: async ({cluster_url, secret_token, url}) ->

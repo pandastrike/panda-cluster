@@ -23,7 +23,10 @@ coffee --nodejs --harmony cli.coffee delete_cluster -c 9VGpFtKIHDVp0b6n62GPaQ -t
 ./bin/main cluster create --name peter-cli-test --domain pandastrike.com --token zTcRofMNSwOKKATO4Yfqkw
 
 
-./bin/main cluster wait --cluster-id l4ARsRJ6cdkSYBhkWaOWXw --token t0lD2eVhAAdluXTvHM_JRA
+./bin/main cluster wait --cluster-id 0nBfXtHTEbF7T83Y_Z3qRA --token t0lD2eVhAAdluXTvHM_JRA
 
 
-./bin/main cluster delete --cluster-id l4ARsRJ6cdkSYBhkWaOWXw --token goMmqfnMi6xYXqE_TuKc7g
+./bin/main cluster delete --cluster-id qMCLSuIVe5m9HfvXtezRig --token goMmqfnMi6xYXqE_TuKc7g
+
+
+docker exec -it 72259530bf2b /bin/bash

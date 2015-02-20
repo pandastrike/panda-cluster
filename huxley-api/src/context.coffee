@@ -1,6 +1,7 @@
 {type, include} = require "fairmont"
 {promise} = require "when"
-{call} = require "when/generator"
+{call, lift} = require "when/generator"
+async = lift
 {resolve} = require "url"
 
 # TODO: convert this to a real class definition
@@ -8,6 +9,7 @@ module.exports = class Context
 
   @make: (context) ->
     {request, response} = context
+    {validate} = context.api.schema
     context.url = (name, object) ->
       # TODO: this is the only place where we need to reference
       # the API; otherwise, this could be completely PBX neutral
@@ -58,7 +60,6 @@ module.exports = class Context
       else
         throw error
 
-
     # context.respond.not_implemented, and so on
     for error, fn of (require "./errors")
       do (error, fn) ->
@@ -73,5 +74,14 @@ module.exports = class Context
     context.data = call ->
       if request.headers["content-type"]?.match(/json/)
         JSON.parse yield context.body
+
+    context.validate = async =>
+      {valid, errors} =
+        validate context.match.action.request.type, (yield context.data)
+      if !valid
+        # TODO: add errors to message
+        # JSON.stringify(errors, null, 2)
+        context.respond.bad_request()
+      valid
 
     context

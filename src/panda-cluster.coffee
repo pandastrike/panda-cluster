@@ -1459,11 +1459,13 @@ module.exports =
 
       console.log "Done. \n"
       #console.log  JSON.stringify data, null, '\t'
+      console.log "****returned successful build"
       return build_success "The requested cluster is online, configured, and ready.",
         data
 
 
     catch error
+      console.log "****some error here"
       console.log JSON.stringify error, null, '\t'
       return build_error "Apologies. The requested cluster cannot be created.", error
 

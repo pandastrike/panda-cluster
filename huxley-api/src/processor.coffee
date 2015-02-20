@@ -1,5 +1,6 @@
 {resolve} = require "when"
 async = (require "when/generator").lift
+JSCK = require("jsck").draft4
 Context = require "./context"
 classifier = require "./classifier"
 
@@ -15,6 +16,11 @@ module.exports = async (api, initialize) ->
       handlers.description ?=
         get: (context) ->
           context.respond 200, api
+
+    api.schema.validate = do ->
+      jsck = (new JSCK api.schema )
+      (type, object) ->
+        jsck.validator(mediaType: type).validate(object)
 
     async (request, response) ->
       try
