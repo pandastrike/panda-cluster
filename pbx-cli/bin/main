@@ -1,3 +1,0 @@
-#!/usr/bin/env coffee --nodejs --harmony
-
-require "../src/cli"
