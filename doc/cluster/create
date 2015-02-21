@@ -25,8 +25,9 @@ Required:
 
 --------------------------------------------------------------------------------
 Optional:
-  -c  (channel)  The CoreOS channel that gets loaded in the instance.  There are three channels,
-        where "stable" is the most battle tested, and "alpha" is the most advanced.
+  -c  (channel)  The CoreOS channel that gets loaded in the instance. (Default = "stable")
+        There are three channels, where "stable" is the most battle tested, and
+        "alpha" is the most advanced.
 
         Allowed Values:
         "alpha", "beta", "stable"
@@ -60,9 +61,9 @@ Optional:
   -s  (cluster_size) Size of cluster. (Default = 3) Clusters must have between 3 and 12
         machines, inclusive.
 
-  -v  (virtualization)  The type of virtualization to use in your instance.  There are two types,
-        para-virtualization (pv) is more common and has better performance, however hardware virtual
-        machine (hvm) is more reliable.
+  -v  (virtualization)  The type of virtualization to use in your instance. (Default = "pv").
+        There are two types, para-virtualization (pv) is more common and has better performance,
+        however hardware virtual machine (hvm) is more reliable.
 
         Allowed Values:
         "pv", "hvm"

@@ -180,28 +180,28 @@ enforce_create_cluster_defaults = (options) ->
   options.cluster_size  = String(options.cluster_size)
   options.spot_price    = String(options.spot_price)     if options.spot_price?
 
-  options.tags = [
-    {
-      Key: "Name"
-      Value: "DavidTest"
-    }
-    {
-      Key: "customer"
-      Value: "pandastrike"
-    }
-    {
-      Key: "environment"
-      Value: "test"
-    }
-    {
-      Key: "project"
-      Value: "huxley"
-    }
-    {
-      Key: "role"
-      Value: "coreos"
-    }
-  ]
+  # options.tags = [
+  #   {
+  #     Key: "Name"
+  #     Value: "DavidTest"
+  #   }
+  #   {
+  #     Key: "customer"
+  #     Value: "pandastrike"
+  #   }
+  #   {
+  #     Key: "environment"
+  #     Value: "test"
+  #   }
+  #   {
+  #     Key: "project"
+  #     Value: "huxley"
+  #   }
+  #   {
+  #     Key: "role"
+  #     Value: "coreos"
+  #   }
+  # ]
 
   return options
 

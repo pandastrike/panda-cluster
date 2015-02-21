@@ -34,7 +34,7 @@ npm install -g coffee-script
 ```
 
 ## Command-Line Tool - Quick Start
-To try this out quickly, you can use panda-cluster's command-line tool on your local machine.  If you install the package globally, you get an executable that accesses library functions, but it is relatively minimal.
+To try this out quickly, you can use panda-cluster's command-line tool on your local machine.  If you install the package globally, you get an executable CLI tool that accesses library functions, but it is relatively minimal.
 
 ```
 git clone https://github.com/pandastrike/panda-cluster.git panda-cluster
@@ -47,38 +47,38 @@ Next, you'll need to place `.panda-cluster.cson` into your $HOME directory.  Thi
 ### .panda-cluster.cson
 ```coffee
 aws:
-  id: "MyAWSIdentity"
-  key: "Password123"
-  region: "us-west-1"
-  ```
-  > **WARNING:** ***NEVER PLACE THIS IN YOUR PROJECT'S REPOSITORY***!!
+id: "MyAWSIdentity"
+key: "Password123"
+region: "us-west-1"
+```
+> **WARNING:** ***NEVER PLACE THIS IN YOUR PROJECT'S REPOSITORY***!!
 
-  <br><br>
-  Now, all you need to do is run this command and you'll have a cluster of your own!  Please see [cluster-architecture.md][9] to
-  ```shell
-  panda-cluster cluster create -n <cluster_name> -d <public_domain_you_own> -k <name_of_ssh_key_in_your_aws_account> -p myapp.cluster -o 0.009 -m true
-  ```
+<br><br>
+Now, all you need to do is run this command and you'll have a cluster of your own!  Please see [cluster-architecture.md][9] to learn more about what this command builds.
+```shell
+panda-cluster cluster create -n <cluster_name> -d <public_domain_you_own> -k <name_of_ssh_key_in_your_aws_account> -p myapp.cluster -o 0.009 -m true
+```
 
-  > **WARNING:** This command will cause *your* AWS account to be charged according to your EC2 usage.  Use of the "-o" flag greatly reduces the cost, so it is preferable for testing.
+> **WARNING:** This command will cause *your* AWS account to be charged according to your EC2 usage.  Use of the "-o" flag greatly reduces the cost, so it is preferable for testing.
 
 
-  <br><br>
-  This was just a quick intro, so please see [command-line-guide.md][7] for more information on the configuration file and this executable.
+<br><br>
+This was just a quick intro, so please see [command-line-guide.md][7] for more information on the configuration file and this executable.
 
-  ## Node Library
-  If you would like to install panda-cluster as a library and programmatically access its methods, install it locally to your project.  Place this line in the "dependencies" object of your project's `package.json` file.
+## Node Library
+If you would like to install panda-cluster as a library and programmatically access its methods, install it locally to your project.  Place this line in the "dependencies" object of your project's `package.json` file.
 
-  ```
-  "panda-cluster": "git://github.com/pandastrike/panda-cluster.git"
-  ```
+```json
+"panda-cluster": "git://github.com/pandastrike/panda-cluster.git"
+```
 
-  This places the panda-cluster Node module into your project and in your `package.json` file as a dependency.  See [api-guide.md][8] for more information on programatic access.
+See [api-guide.md][8] for more information on programatic access.
 
-  ## Command-Line Guide
-  To keep this ReadMe short, the command-line documentation has been placed into a separate file.  See the file [command-line-guide.md][7] for complete information.
+## Command-Line Guide
+To keep this ReadMe short, the command-line documentation has been placed into a separate file.  See the file [command-line-guide.md][7] for complete information.
 
-  ## API Guide
-  To keep this ReadMe short, the API documentation has been placed into a separate file.  See the file [api-guide.md][8] for complete information.
+## API Guide
+To keep this ReadMe short, the API documentation has been placed into a separate file.  See the file [api-guide.md][8] for complete information.
 
 
 [1]:https://coreos.com/

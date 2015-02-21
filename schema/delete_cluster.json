@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Panda-Cluster Delete-Cluster",
+  "description": "This is the configuation object panda-cluster needs to find and delete a CoreOS cluster in your AWS account.",
+  "type": "object",
+  "properties": {
+    "aws": {
+      "description": "Describes the user's AWS credentials to gain API access.",
+      "type": "object",
+      "properties": {
+        "id":     {"type": "string"},
+        "key":    {"type": "string"},
+        "region": {
+          "type": "string",
+          "enum": ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2", "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1", "us-west-2"]
+        },
+      },
+      "additionalProperties": false,
+      "required": ["id", "key", "region"]
+    },
+    "cluster_name": {
+      "description": "The name of request sent to AWS CloudFormation. AWS requires this to be unqiue among names in your account.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "region": {
+      "description": "This allows you to override the region specified in the AWS credentials section.",
+      "type": "string",
+      "enum": ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2", "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1", "us-west-2"]
+    }
+  },
+  "additionalProperties": false,
+  "required": ["aws", "cluster_name"]
+}
