@@ -37,7 +37,7 @@ npm install -g coffee-script
 To try this out quickly, you can use panda-cluster's command-line tool on your local machine.  If you install the package globally, you get an executable CLI tool that accesses library functions, but it is relatively minimal.
 
 ```
-npm install pandastrike/panda-cluster -g .
+npm install pandastrike/panda-cluster -g
 ```
 
 Next, you'll need to place `.panda-cluster.cson` into your $HOME directory.  This is how panda-cluster accesses AWS on your behalf.
