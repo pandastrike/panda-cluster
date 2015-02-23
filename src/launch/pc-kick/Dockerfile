@@ -17,7 +17,7 @@ RUN pacman -S --noconfirm git openssh wget vim tmux nodejs
 RUN npm install -g coffee-script
 
 # Pull the Kick repo from GitHub.
-RUN git clone https://github.com/pandastrike/panda-cluster-kick.git
+RUN git clone https://github.com/pandastrike/panda-kick.git
 
 # Install all other modules / dependencies.
-RUN cd panda-cluster-kick && npm install
+RUN cd panda-kick && npm install
