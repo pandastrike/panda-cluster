@@ -68,6 +68,10 @@
       "exclusiveMinimum": false,
       "exclusiveMaximum": false
     },
+    "formation_service_templates": {
+      "description": "This specifies whether the EC2 instances should have additional storage allocated for the Docker host (recommended in most cases).  This is accomplished with a special service placed into the CloudFormation template.",
+      "type": "boolean"
+    },
     "virtualization": {
       "description": "This specifies which form of virtualization you would prefer your instances use.",
       "type": "string",
