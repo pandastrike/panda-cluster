@@ -10,6 +10,8 @@ allowing it to understand and gracefully manipulate clusters running in your AWS
 Each comes equipped with a private DNS and sidekick support servers.
 
 Required:
+  -a  (availability_zone) The name of the desired availability zone within the specified AWS region. 
+
   -d  (public_domain) The name of the public hosted zone that routes the Internet to your cluster.
         You must own this domain.
 

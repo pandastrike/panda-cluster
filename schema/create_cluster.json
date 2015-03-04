@@ -18,6 +18,10 @@
       "additionalProperties": false,
       "required": ["id", "key", "region"]
     },
+    "availability_zone": {
+      "description": "The name of the desired availability zone within the specified AWS region. ",
+      "type": "string"
+    },
     "public_keys": {
       "description": "A list of public keys that get placed into the cluster, granting access anyone with a corresponding private key.",
       "type": "array",

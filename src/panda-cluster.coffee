@@ -311,7 +311,7 @@ build_template = async (options, creds) ->
     resources["ClusterSubnet"] =
       Type: "AWS::EC2::Subnet"
       Properties:
-        AvailabilityZone: "us-west-1c"
+        AvailabilityZone: options.availability_zone
         VpcId: { Ref: "VPC" }
         CidrBlock : "10.0.0.0/16"
 
@@ -430,7 +430,7 @@ build_template = async (options, creds) ->
     # Modify the object specifying the cluster's auto-scaling group.  Associate with the VPC.
     resources.CoreOSServerAutoScale["DependsOn"] = "ClusterGateway"
     resources.CoreOSServerAutoScale.Properties["VPCZoneIdentifier"] = [{Ref: "ClusterSubnet"}]
-    resources.CoreOSServerAutoScale.Properties.AvailabilityZones = ["us-west-1c"]
+    resources.CoreOSServerAutoScale.Properties.AvailabilityZones = [options.availability_zone]
 
     # Associate the cluster's auto-scaling group with the user-specified tags.
     if options.tags? && options.tags.length > 0

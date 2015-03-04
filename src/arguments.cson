@@ -11,6 +11,12 @@ cluster:
       manifest: false
     }
     {
+      name: "availability_zone"
+      flag: "-a"
+      long_flag: "--availability-zone"
+      required: true
+    }
+    {
       name: "channel"
       flag: "-c"
       long_flag: "--channel"
