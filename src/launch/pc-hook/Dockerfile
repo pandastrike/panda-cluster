@@ -11,7 +11,8 @@ MAINTAINER David Harper (david@pandastrike.com)
 # Install requirements, a couple dependencies, and some tools that make life easier.
 RUN pacman -Syu --noconfirm
 RUN pacman-db-upgrade
-RUN pacman -S --noconfirm git openssh wget vim tmux
+RUN pacman -S --noconfirm git nodejs openssh wget vim tmux
+RUN npm install -g coffee-script
 
 # On Archlinux, fleet is only available as an AUR community package, so we'll have
 # to jump through a few extra hoops.  Download the AUR package and place the
