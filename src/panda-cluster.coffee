@@ -1495,7 +1495,7 @@ module.exports =
     catch error
       return build_error "Apologies. The targeted cluster has not been destroyed.", error
 
-   get_cluster_status: async (options) ->
-       credentials = options.aws
-       credentials.region = options.region || credentials.region
-       yield get_formation_status options, credentials
+  get_cluster_status: async (options) ->
+     credentials = options.aws
+     credentials.region = options.region || credentials.region
+     yield get_formation_status options, credentials
