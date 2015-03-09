@@ -1118,6 +1118,7 @@ prepare_launch_directory = async (options) ->
         "ssh -A -o \"StrictHostKeyChecking no\" -o \"UserKnownHostsFile=/dev/null\" " +
         "core@#{address} << EOF \n " +
         "mkdir launch \n" +
+        "mkdir prelaunch \n" +
         "EOF"
 
 
