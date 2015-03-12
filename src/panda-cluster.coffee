@@ -1302,9 +1302,9 @@ customize_cluster = async (options, creds) ->
     console.log "Private DNS launched: #{options.private_domain} #{change_id} #{zone_id}"
     data.launch_private_domain = result
     options.private_zone_id = zone_id
-    data.detect_private_dns_formation = yield poll_until_true get_hosted_zone_status,
-      change_id, creds, 5000, "Unable to detect Private DNS formation."
-    console.log "Private DNS fully online."
+    #data.detect_private_dns_formation = yield poll_until_true get_hosted_zone_status,
+    #  change_id, creds, 5000, "Unable to detect Private DNS formation."
+    #console.log "Private DNS fully online."
 
     #---------------------------------------------------
     # Launch Dir + Kick + Hook
