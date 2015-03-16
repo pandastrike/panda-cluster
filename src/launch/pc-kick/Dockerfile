@@ -1,4 +1,4 @@
-FROM base/archlinux
+FROM pandastrike/arch_plus 
 MAINTAINER David Harper (david@pandastrike.com)
 #===============================================================================
 # Kick Server - Huxley
@@ -9,12 +9,10 @@ MAINTAINER David Harper (david@pandastrike.com)
 # all Huxley mixins.
 
 # Install requirements and some tools that make life easier.
-RUN pacman -Syu --noconfirm
-RUN pacman-db-upgrade
-RUN pacman -S --noconfirm git openssh wget vim tmux nodejs
-
-# Install CoffeeScript.
-RUN npm install -g coffee-script
+#RUN pacman -Syu --noconfirm
+#RUN pacman-db-upgrade
+#RUN pacman -S --noconfirm git openssh wget vim tmux nodejs
+#RUN npm install -g coffee-script
 
 # Pull the Kick repo from GitHub.
 RUN git clone https://github.com/pandastrike/panda-kick.git
