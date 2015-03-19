@@ -1,4 +1,4 @@
 #!/usr/bin/env coffee --nodejs --harmony
 
 # This script is a wrapper for the PandaCluster Node library.
-require("../src/cli")
+require("../src/cli/cli")

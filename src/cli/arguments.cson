@@ -7,10 +7,6 @@
 cluster:
   create:[
     {
-      dotfile_master: true
-      manifest: false
-    }
-    {
       name: "availability_zone"
       flag: "-a"
       long_flag: "--availability-zone"
@@ -41,12 +37,6 @@ cluster:
       flag: "-k"
       long_flag: "--key-name"
       required: true
-    }
-    {
-      name: "formation_service_templates"
-      flag: "-m"
-      long_flag: "--formation-service-templates"
-      type: "boolean"
     }
     {
       name: "cluster_name"
@@ -95,10 +85,6 @@ cluster:
 
   delete:[
     {
-      dotfile_master: true
-      manifest: false
-    }
-    {
       name: "cluster_name"
       flag: "-n"
       long_flag: "--name"
@@ -113,77 +99,3 @@ cluster:
       "us-west-2"]
     }
   ]
-
-# app:
-#   create: [
-#     {
-#       dotfile_master: true
-#       manifest: false
-#     }
-#     {
-#       name: "cluster_name"
-#       flag: "-c"
-#       long_flag: "--cluster-name"
-#       required: true
-#     }
-#     {
-#       name: "public_domain"
-#       flag: "-d"
-#       long_flag: "--public-domain"
-#       required: true
-#     }
-#     {
-#       name: "app_name"
-#       flag: "-n"
-#       long_flag: "--app-name"
-#       required: true
-#     }
-#     {
-#       name: "region"
-#       flag: "-r"
-#       long_flag: "--region"
-#       allowed_values: ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2",
-#       "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1",
-#       "us-west-2"]
-#     }
-#   ]
-#   delete: [
-#     {
-#       dotfile_master: true
-#       manifest: true
-#     }
-#     {
-#       name: "cluster_name"
-#       flag: "-c"
-#       long_flag: "--cluster-name"
-#       required: true
-#     }
-#     {
-#       name: "app_name"
-#       flag: "-n"
-#       long_flag: "--app-name"
-#       required: true
-#     }
-#     {
-#       name: "region"
-#       flag: "-r"
-#       long_flag: "--region"
-#       allowed_values: ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2",
-#       "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1",
-#       "us-west-2"]
-#     }
-#   ]
-#   push: [
-#     {
-#       dotfile_master: true
-#       manifest: true
-#     }
-#     {
-#       name: "region"
-#       flag: "-r"
-#       long_flag: "--region"
-#       allowed_values: ["ap-northeast-1", "ap-southeast-1", "ap-southeast-2",
-#       "eu-central-1", "eu-west-1", "sa-east-1", "us-east-1", "us-west-1",
-#       "us-west-2"]
-#     }
-#   ]
