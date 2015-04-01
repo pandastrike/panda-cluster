@@ -30,7 +30,7 @@ async = (require "when/generator").lift
 # Access AWS API
 AWS = require "aws-sdk"
 
-{status_update} = require "api-interface"
+{status_update} = require "./api-interface"
 
 
 #================================
