@@ -10,6 +10,7 @@
 module.exports = (config) ->
 
   update_status: async (spec) ->
+    console.log "**Updating Cluster Status with API**"
     config.status = spec.status
     config.detail = spec.detail
     config.secret_token = spec.secret_token
