@@ -1425,7 +1425,7 @@ module.exports =
     # Enforce defaults and formatting.
     options = enforce_create_cluster_defaults options
 
-    update_status = (require "./api-interface")(options)
+    {update_status} = (require "./api-interface")(options)
 
     try
       # Make calls to Amazon's API. Gather data as we go.
@@ -1493,7 +1493,7 @@ module.exports =
     credentials = options.aws
     credentials.region = options.region || credentials.region
 
-    update_status = (require "./api-interface")(options)
+    {update_status} = (require "./api-interface")(options)
 
     try
       # Make calls to Amazon's API. Gather data as we go.
