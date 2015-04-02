@@ -1451,11 +1451,11 @@ module.exports =
         # Spot Instances - wait for our Spot Request to be fulfilled.
         {result, instances} = yield poll_until_true get_spot_status, options,
          credentials, 5000, "Unable to detect Spot Instance fulfillment."
-         yield update_status {status: "starting", detail: "Spot instances fulfilled."}
 
         data.detect_spot_fulfillment = result
         options.instances = instances
         console.log "Spot Request Fulfilled. Instance Online."
+        yield update_status {status: "starting", detail: "Spot instances fulfilled."}
       else
         # On-Demand Instances - already active from CloudFormation.
         options.instances = yield get_on_demand_instances options, credentials
