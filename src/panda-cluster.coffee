@@ -1237,7 +1237,7 @@ prepare_hook = async (options, creds) ->
       #"ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
       "ssh -A -o \"StrictHostKeyChecking no\"  -o \"UserKnownHostsFile=/dev/null\" " +
       "core@#{options.instances[0].public_ip} << EOF\n" +
-      "docker pull pandastrike/pc_hook \n" +
+      "docker pull pandastrike/huxley_hook \n" +
       "EOF"
 
     output.build_hook = yield execute command
@@ -1248,7 +1248,7 @@ prepare_hook = async (options, creds) ->
     command =
       "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
       "core@#{options.instances[0].public_ip} << EOF\n" +
-      "docker run -d -p 3000:22 -p 2001:80 --name hook pandastrike/pc_hook /bin/bash -c \""
+      "docker run -d -p 3000:22 -p 2001:80 --name hook pandastrike/huxley_hook /bin/bash -c \""
 
     # Pass in public keys so users may have access.
     for key in options.public_keys
