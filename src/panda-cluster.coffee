@@ -1154,7 +1154,7 @@ prepare_kick = async (options, creds) ->
       #"ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
       "ssh -A -o \"StrictHostKeyChecking no\"  -o \"UserKnownHostsFile=/dev/null\" " +
       "core@#{options.instances[0].public_ip} << EOF\n" +
-      "docker pull pandastrike/huxley_kick:v1.0.0-alpha-02.2 \n" +
+      "docker pull pandastrike/huxley_kick:v1.0.0-alpha-03.1 \n" +
       "EOF"
 
     output.build_kick = yield execute command
@@ -1170,7 +1170,7 @@ prepare_kick = async (options, creds) ->
     command =
       "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
       "core@#{options.instances[0].public_ip} << EOF\n" +
-      "docker run -d -p 2000:8080 --name kick pandastrike/huxley_kick:v1.0.0-alpha-02.2 /bin/bash -c " +
+      "docker run -d -p 2000:8080 --name kick pandastrike/huxley_kick:v1.0.0-alpha-03.1 /bin/bash -c " +
       "\"cd panda-kick/config &&  " +
 
       "sed \"s/aws_id_goes_here/#{creds.id}/g\" < kick.cson > temp && " +
