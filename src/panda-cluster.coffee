@@ -1194,7 +1194,7 @@ prepare_kick = async (options, creds) ->
       "sed \"s/private_zone_name_goes_here/#{options.private_domain}/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
-      "sed \"s/api_server_name_goes_here/#{options.huxley_url}/g\" < kick.cson > temp && " +
+      "sed \"s/api_server_name_goes_here/'#{options.huxley_url}'/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
       "sed \"s/cluster_id_goes_here/#{options.cluster_id}/g\" < kick.cson > temp && " +
