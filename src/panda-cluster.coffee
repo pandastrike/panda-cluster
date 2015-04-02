@@ -1484,7 +1484,7 @@ module.exports =
 
 
     catch error
-      console.log JSON.stringify error, null, '\t'
+      console.log "Failure", JSON.stringify error, null, '\t'
       return build_error "Apologies. The requested cluster cannot be created.", error
 
 

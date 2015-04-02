@@ -5,7 +5,7 @@
 # status during formation and deletion.
 
 {async} = require "fairmont"
-{discover} = require "./client"
+{discover} = (require "pbx").client
 
 module.exports = (config) ->
 
