@@ -30,9 +30,6 @@ async = (require "when/generator").lift
 # Access AWS API
 AWS = require "aws-sdk"
 
-{update_status} = require "./api-interface"
-
-
 #================================
 # Helper Functions
 #================================
@@ -1254,6 +1251,9 @@ prepare_hook = async (options, creds) ->
     for key in options.public_keys
       command = command + " echo \'#{key}\' >> root/.ssh/authorized_keys && "
 
+    # Add the cluster agent private key so the hook server can access the host.
+    command += " echo \'#{options.agent.private}\' >> root/.ssh/id_rsa && "
+
     # Have the server generate host keys, then activate the SSH server in non-
     # detached mode, which keeps the container online.  We also need to use
     # the setting "UsePAM no".  Otherwise, there is some bug in Docker that
@@ -1282,7 +1282,7 @@ prepare_hook = async (options, creds) ->
 
 # After cluster formation is complete, launch a variety of services
 # into the cluster from a library of established unit-files and AWS commands.
-customize_cluster = async (options, creds, update_status) ->
+customize_cluster = async (options, creds, update) ->
   # Gather success data as we go.
   data = {}
   dns_changes = {}
@@ -1320,13 +1320,13 @@ customize_cluster = async (options, creds, update_status) ->
     data.prepare_launch_directory = yield prepare_launch_directory options
     console.log "Launch Directory Created."
 
-    yield update_status {status: "starting", detail: "Launching kick server."}
+    yield update {status: "starting", detail: "Launching kick server."}
     result = yield prepare_kick options, creds
     data.prepare_kick = result.result
     dns_changes.kick = result.change_id
     console.log "Kick Server Online."
 
-    yield update_status {status: "starting", detail: "Launching hook server."}
+    yield update {status: "starting", detail: "Launching hook server."}
     result = yield prepare_hook options, creds
     data.prepare_hook = result.result
     dns_changes.hook = result.change_id
@@ -1350,7 +1350,7 @@ customize_cluster = async (options, creds, update_status) ->
      creds, 5000, "Unable to detect Kick registration.", 25
     console.log "Hook Hostname Set"
 
-    yield update_status {status: "online", detail: "Cluster lauch and configuration complete."}
+    yield update {status: "online", detail: "Cluster lauch and configuration complete."}
 
     return build_success "Cluster customizations are complete.", data
   catch error
@@ -1425,20 +1425,20 @@ module.exports =
     # Enforce defaults and formatting.
     options = enforce_create_cluster_defaults options
 
-    {update_status} = (require "./api-interface")(options)
+    {update} = (require "./api-interface")(options)
 
     try
       # Make calls to Amazon's API. Gather data as we go.
       data = {}
       data.launch_stack = yield launch_stack(options, credentials)
       console.log "Stack Launched.  Formation In-Progress."
-      yield update_status {status: "starting", detail: "CloudFromation stack in progress."}
+      yield update {status: "starting", detail: "CloudFromation stack in progress."}
 
       # Monitor the CloudFormation stack until it is fully created.
       data.detect_formation = yield poll_until_true get_formation_status, options,
        credentials, 5000, "Unable to detect cluster formation."
       console.log "Stack Formation Complete."
-      yield update_status {status: "starting", detail: "CloudFromation stack complete."}
+      yield update {status: "starting", detail: "CloudFromation stack complete."}
 
       # Now that CloudFormation is complete, identify the VPC and subnet that were created.
       options.vpc_id = yield get_cluster_vpc_id options, credentials
@@ -1447,7 +1447,7 @@ module.exports =
       # If we're using spot instances, we'll need to wait and detect when our Spot Request has been fulfilled.
       if options.spot_price?
         console.log "Waiting for Spot Instance Fulfillment."
-        yield update_status {status: "starting", detail: "Waiting for spot instance fulfillment."}
+        yield update {status: "starting", detail: "Waiting for spot instance fulfillment."}
         # Spot Instances - wait for our Spot Request to be fulfilled.
         {result, instances} = yield poll_until_true get_spot_status, options,
          credentials, 5000, "Unable to detect Spot Instance fulfillment."
@@ -1455,12 +1455,12 @@ module.exports =
         data.detect_spot_fulfillment = result
         options.instances = instances
         console.log "Spot Request Fulfilled. Instance Online."
-        yield update_status {status: "starting", detail: "Spot instances fulfilled."}
+        yield update {status: "starting", detail: "Spot instances fulfilled."}
       else
         # On-Demand Instances - already active from CloudFormation.
         options.instances = yield get_on_demand_instances options, credentials
         console.log "On-Demand Instance Online."
-        yield update_status {status: "starting", detail: "On-demand instances online."}
+        yield update {status: "starting", detail: "On-demand instances online."}
 
 
       # Get the IP addresses of our instances.
@@ -1475,7 +1475,7 @@ module.exports =
         console.log "Instance #{id}: #{public_ip} #{private_ip}"
 
       # Continue setting up the cluster.
-      data.customize_cluster = yield customize_cluster( options, credentials, update_status)
+      data.customize_cluster = yield customize_cluster( options, credentials, update)
 
       console.log "Done. \n"
       #console.log  JSON.stringify data, null, '\t'
@@ -1493,7 +1493,7 @@ module.exports =
     credentials = options.aws
     credentials.region = options.region || credentials.region
 
-    {update_status} = (require "./api-interface")(options)
+    {update} = (require "./api-interface")(options)
 
     try
       # Make calls to Amazon's API. Gather data as we go.
@@ -1505,11 +1505,11 @@ module.exports =
 
       # Now delete the associated resources.
       data.delete_private_domain = yield delete_private_domain( options, credentials)
-      update_status {status: "shutting_down", detail: "Cluster domain DNS records removed."}
+      yield update {status: "shutting_down", detail: "Cluster domain DNS records removed."}
 
       # Delete the CloudFormation Stack running our cluster.
       data.delete_stack = yield delete_stack( options, credentials)
-      yield update_status {status: "shutting_down", detail: "CloudFormation stack deletion in progress."}
+      yield update {status: "stopped", detail: "CloudFormation stack deletion in progress."}
 
       console.log "Done. \n"
       return build_success "The targeted cluster has been destroyed.  All related resources have been released.",
