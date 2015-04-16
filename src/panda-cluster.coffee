@@ -1049,6 +1049,7 @@ get_private_zone_id = async (vpc_id, creds) ->
     data = yield list_zones {}
 
     # Dig the ID out of an array, holding an object, holding the string we need.
+    return false if (where data.HostedZones, {CallerReference: vpc_id}).length == 0
     return where( data.HostedZones, {CallerReference: vpc_id})[0].Id
 
   catch error
@@ -1369,6 +1370,7 @@ delete_private_domain = async (options, creds) ->
   try
     # Determine the Hosted Zone ID of the cluster's private domain.
     options.private_zone_id = yield get_private_zone_id options.vpc_id, creds
+    return unless options.private_zone_id
 
     # Pull the list of DNS records within this Hosted Zone.
     zone_records = yield get_all_records options.private_zone_id, creds
