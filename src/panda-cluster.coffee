@@ -1252,7 +1252,8 @@ prepare_hook = async (options, creds) ->
       command = command + " echo \'#{key}\' >> root/.ssh/authorized_keys && "
 
     # Add the cluster agent private key so the hook server can access the host.
-    command += " echo \'#{options.agent.private}\' >> root/.ssh/id_rsa && "
+    command += " echo \'#{options.agent.private}\' >> root/.ssh/id_rsa && " +
+      " chmod 400 root/.ssh/id_rsa && "
 
     # Have the server generate host keys, then activate the SSH server in non-
     # detached mode, which keeps the container online.  We also need to use
