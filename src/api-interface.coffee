@@ -9,8 +9,8 @@
 
 module.exports = (config) ->
 
-  update_status: async (spec) ->
+  update: async (spec) ->
     config.status = spec.status
     config.detail = spec.detail
-    clusters = (yield discover config.huxley_url).clusters
+    clusters = (yield discover config.huxley.url).clusters
     yield clusters.put config
