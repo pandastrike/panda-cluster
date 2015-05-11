@@ -5,6 +5,6 @@ After=format-ephemeral.service
 Before=docker.service
 
 [Mount]
-What={{{drive_path}}}
+What=/dev/xvdb
 Where=/var/lib/docker
 Type=btrfs

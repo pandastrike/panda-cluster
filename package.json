@@ -28,14 +28,9 @@
     "amen": "^1.0.0-alpha-03",
     "aws-sdk": "^2.0.31",
     "fairmont": "^1.0.0-beta-03",
-    "js-yaml": "^3.2.5",
-    "jsck": "^0.2.1",
     "mustache": "^1.0.0",
     "panda-config": "^1.0.0-alpha-03",
     "pbx": "^1.0.0-beta-03",
-    "pirate": "^1.0.0-alpha-05",
-    "routington": "^1.0.2",
-    "shred": "^1.1.0-alpha-03",
     "when": "^3.6.3"
   },
   "engines": {
