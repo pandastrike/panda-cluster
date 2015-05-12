@@ -6,13 +6,14 @@
 
 {detect, identify} = require "./monitor"
 destroy = require "./destroy"
+{update} = require "../huxley"
 
 module.exports = async (spec) ->
   # Pull in the promise wrapped functions of the "aws-sdk" library.
   aws = (require "../aws")(spec.aws)
   try
     # Before we delete the stack, we must identify associated resources. We can
-    # use the the VPC's ID to track these. 
+    # use the the VPC's ID to track these.
     spec = yield identify spec, aws
 
     # Delete the cluster.
@@ -20,7 +21,8 @@ module.exports = async (spec) ->
 
     # Monitor the deletion and report when it is complete.
     yield detect spec, aws
-    console.log "Done."
+    yield update spec, "stopped", "Cluster Is Fully Destroyed."
   catch error
-    console.log error
-    console.log line for line in (error.stack.split "\n")
+    yield update spec, "stopped", error
+    # console.log error
+    # console.log line for line in (error.stack.split "\n")

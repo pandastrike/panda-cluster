@@ -13,7 +13,6 @@ module.exports =
   install: async (spec, aws) ->
     {zones, instances} = spec.cluster
     # Address the kick server on the cluster's private hostedzone.
-    console.log "Adding Hook Server to DNS Record"
     change = yield record {
         action: "set"
         hostname: "hook.#{zones.private.name}"
@@ -23,7 +22,6 @@ module.exports =
       aws
 
     # Pull the hook-server's Docker container from the public repo.
-    console.log "Building Hook Container...  This will take a moment."
     yield shell "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
       "core@#{instances[0].ip.public} << EOF\n" +
       "docker pull pandastrike/huxley_hook \n" +
