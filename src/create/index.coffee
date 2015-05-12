@@ -24,6 +24,6 @@ module.exports = async (spec) ->
     yield configure spec, aws
     yield update spec, "online", "Cluster is ready."
   catch error
-    yield update spec, "stopped", "Error during creation."
+    yield update spec, "failed", "Error during creation."
     console.log error
     console.log line for line in (error.stack.split "\n")
