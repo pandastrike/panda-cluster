@@ -7,5 +7,5 @@ module.exports =
   "-o \"StrictHostKeyChecking no\" " +
   "-o \"UserKnownHostsFile=/dev/null\" " +
   "-o \"ServerAliveInterval 10\" " +
-  "-o \"ServerAliveCountMax 2\" "
+  "-o \"ServerAliveCountMax 2\" " +
   "-o \"ConnectTimeout 10\""
