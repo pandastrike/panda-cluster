@@ -7,6 +7,7 @@
 {async, shell} = require "fairmont"
 
 {record} = require "../../../dns"
+ssh_with_config = require "../ssh" # string with config details
 
 module.exports =
   # Access the head instance and load the agent's Docker image.
@@ -22,11 +23,7 @@ module.exports =
       aws
 
     # Pull the hook-server's Docker container from the public repo.
-    yield shell "ssh -A " +
-      "-o \"StrictHostKeyChecking no\" " +
-      "-o \"UserKnownHostsFile=/dev/null\" " +
-      "-o \"ServerAliveInterval 10\" " +
-      "-o \"ServerAliveCountMax 2\" " +
+    yield shell ssh_with_config +
       "core@#{instances[0].ip.public} << EOF\n" +
       "docker pull pandastrike/huxley_hook \n" +
       "EOF"
@@ -34,11 +31,7 @@ module.exports =
     #----------------------------
     # Activate the hook server.
     #----------------------------
-    command = "ssh -A " +
-      "-o \"StrictHostKeyChecking no\" " +
-      "-o \"UserKnownHostsFile=/dev/null\" " +
-      "-o \"ServerAliveInterval 10\" " +
-      "-o \"ServerAliveCountMax 2\" " +
+    command = ssh_with_config +
       "core@#{instances[0].ip.public} << EOF\n" +
       "docker run -d -p 3000:22 -p 2001:80 --name hook " +
       "pandastrike/huxley_hook /bin/bash -c \""
