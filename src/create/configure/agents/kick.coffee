@@ -40,6 +40,7 @@ module.exports =
     zones.private.id = zones.private.id.split("/")[2]
 
     yield shell ssh_with_config +
+      "core@#{instances[0].ip.public} << EOF\n" +
       "docker run -d -p 2000:8080 --name kick " +
       "pandastrike/huxley_kick:v1.0.0-alpha-03.1 /bin/bash -c " +
       "\"cd panda-kick/config &&  " +
