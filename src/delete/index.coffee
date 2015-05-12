@@ -6,12 +6,14 @@
 
 {detect, identify} = require "./monitor"
 destroy = require "./destroy"
-{update} = require "../huxley"
+{update, resolve} = require "../huxley"
 
 module.exports = async (spec) ->
   # Pull in the promise wrapped functions of the "aws-sdk" library.
   aws = (require "../aws")(spec.aws)
   try
+    spec = yield resolve spec
+
     # Before we delete the stack, we must identify associated resources. We can
     # use the the VPC's ID to track these.
     spec = yield identify spec, aws
