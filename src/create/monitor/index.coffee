@@ -26,11 +26,8 @@ module.exports = async (spec, aws) ->
     spec.cluster.instances = yield spot.get spec, aws       # Spot Instances
     yield update spec, "starting", "Spot Instances Online."
 
-  # # Gather the IP addresses (public and private) on these instances.
-  # for x in [0...spec.cluster.size]
-  #   spec.cluster.instances[x].ip = yield address spec.cluster.instances[x].id, aws
-  #
-  # for x in spec.cluster.instances
-  #   console.log "Instance:", x.id, x.ip.public, x.ip.private
+  # Gather the IP addresses (public and private) on these instances.
+  for x in [0...spec.cluster.size]
+    spec.cluster.instances[x].ip = yield address spec.cluster.instances[x].id, aws
 
   return spec
