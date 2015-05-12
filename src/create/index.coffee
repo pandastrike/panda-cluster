@@ -25,5 +25,5 @@ module.exports = async (spec) ->
     yield update spec, "online", "Cluster Is Ready."
   catch error
     yield update spec, "stopped", error
-    # console.log error
-    # console.log line for line in (error.stack.split "\n")
+    console.log error
+    console.log line for line in (error.stack.split "\n")
