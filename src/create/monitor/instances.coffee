@@ -31,13 +31,12 @@ module.exports =
       ]
 
       is_active = (x) -> x == "active"
-      is_failed = (x) -> x == "closed" || x == "failed" || x == "canceled"
+      is_failed = (x) -> x == "closed" || x == "failed" || x == "cancelled"
       identify = (x) -> id: x.InstanceId
 
       while true
         {SpotInstanceRequests} = yield aws.ec2.describe_spot_instance_requests params
         states = collect project "State", SpotInstanceRequests
-        console.log states
         success = collect map is_active, states
         failure = collect map is_failed, states
 
