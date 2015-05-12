@@ -22,8 +22,8 @@ module.exports = async (spec) ->
 
     # Configure the cluster: Set hostname, install cluster agents
     yield configure spec, aws
-    yield update spec, "online", "Cluster Is Ready."
+    yield update spec, "online", "Cluster is ready."
   catch error
-    yield update spec, "stopped", error
+    yield update spec, "stopped", "Error during creation."
     console.log error
     console.log line for line in (error.stack.split "\n")
