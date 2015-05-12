@@ -1,7 +1,7 @@
 # When we use Route53 to make DNS record changes, we submit an array of
 # operations to perform on the record listings.  These are processed in
 # a batch by AWS.
-{async, collect, where, empty} = require "fairmont"
+{async, collect, where, empty, sleep} = require "fairmont"
 
 deletion = (record, hostname) ->
   return {
@@ -27,6 +27,11 @@ creation = (ip, hostname, type) ->
 module.exports = async ({id, hostname, ip, action}, aws) ->
   # List of DNS operations.
   changes = []
+
+  # There is an inconsistently appearing error where the change commands are not
+  # set properly.  For now, we will try to settle for a "sleep" command until we
+  # can find a proper solution.
+  yield sleep 10000
 
   # Does the requested record exist?
   data = yield aws.route53.list_resource_record_sets {HostedZoneId: id}
