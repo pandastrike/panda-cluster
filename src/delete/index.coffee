@@ -13,6 +13,7 @@ module.exports = async (spec) ->
   aws = (require "../aws")(spec.aws)
   try
     spec = yield resolve spec
+    console.log spec.huxley.url
 
     # Before we delete the stack, we must identify associated resources. We can
     # use the the VPC's ID to track these.
