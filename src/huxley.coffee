@@ -17,20 +17,3 @@ module.exports =
       yield clusters.put spec
     catch error
       throw new Error "Failed to update status. \n #{error}"
-
-  # Determine the correct protocol to use to contact the API server.
-  resolve: async (spec) ->
-    # try
-    #   yield discover spec.huxley.url
-    # catch
-    try
-      yield discover "https://#{spec.huxley.url}"
-      spec.huxley.url = "https://#{spec.huxley.url}"
-    catch
-      try
-        yield discover "http://#{spec.huxley.url}"
-        spec.huxley.url = "http://#{spec.huxley.url}"
-      catch
-        throw new Error "Unable to contact API server."
-
-    return spec
