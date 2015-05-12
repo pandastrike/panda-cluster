@@ -9,8 +9,8 @@
 
 module.exports =
   update: async (spec, status, details) ->
-    spec.huxley.status = status
-    spec.huxley.details = details
+    spec.cluster.status = status
+    spec.cluster.details = details
 
     try
       clusters = (yield discover spec.huxley.url).clusters
