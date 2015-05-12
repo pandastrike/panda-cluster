@@ -37,6 +37,7 @@ module.exports =
       while true
         {SpotInstanceRequests} = yield aws.ec2.describe_spot_instance_requests params
         states = collect project "State", SpotInstanceRequests
+        console.log states
         success = collect map is_active, states
         failure = collect map is_failed, states
 
