@@ -22,8 +22,11 @@ module.exports =
       aws
 
     # Pull the kick-server's Docker container from the public repo.
-    yield shell "ssh -A -o \"StrictHostKeyChecking no\" " +
-      " -o \"UserKnownHostsFile=/dev/null\" " +
+    yield shell "ssh -A " +
+      "-o \"StrictHostKeyChecking no\" " +
+      "-o \"UserKnownHostsFile=/dev/null\" " +
+      "-o \"ServerAliveInterval 10\" " +
+      "-o \"ServerAliveCountMax 2\" " +
       "core@#{instances[0].ip.public} << EOF\n" +
       "docker pull pandastrike/huxley_kick:v1.0.0-alpha-03.1 \n" +
       "EOF"
@@ -39,9 +42,13 @@ module.exports =
     zones.public.id = zones.public.id.split("/")[2]
     zones.private.id = zones.private.id.split("/")[2]
 
-    yield shell "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
-      "core@#{instances[0].ip.public} << EOF\n" +
-      "docker run -d -p 2000:8080 --name kick pandastrike/huxley_kick:v1.0.0-alpha-03.1 /bin/bash -c " +
+    yield shell "ssh -A " +
+      "-o \"StrictHostKeyChecking no\" " +
+      "-o \"UserKnownHostsFile=/dev/null\" " +
+      "-o \"ServerAliveInterval 10\" " +
+      "-o \"ServerAliveCountMax 2\" " +
+      "docker run -d -p 2000:8080 --name kick " +
+      "pandastrike/huxley_kick:v1.0.0-alpha-03.1 /bin/bash -c " +
       "\"cd panda-kick/config &&  " +
 
       "sed \"s/aws_id_goes_here/#{spec.aws.id}/g\" < kick.cson > temp && " +

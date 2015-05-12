@@ -22,7 +22,11 @@ module.exports =
       aws
 
     # Pull the hook-server's Docker container from the public repo.
-    yield shell "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
+    yield shell "ssh -A " +
+      "-o \"StrictHostKeyChecking no\" " +
+      "-o \"UserKnownHostsFile=/dev/null\" " +
+      "-o \"ServerAliveInterval 10\" " +
+      "-o \"ServerAliveCountMax 2\" " +
       "core@#{instances[0].ip.public} << EOF\n" +
       "docker pull pandastrike/huxley_hook \n" +
       "EOF"
@@ -30,10 +34,14 @@ module.exports =
     #----------------------------
     # Activate the hook server.
     #----------------------------
-    command =
-      "ssh -A -o \"StrictHostKeyChecking no\" -o \"LogLevel=quiet\" -o \"UserKnownHostsFile=/dev/null\" " +
+    command = "ssh -A " +
+      "-o \"StrictHostKeyChecking no\" " +
+      "-o \"UserKnownHostsFile=/dev/null\" " +
+      "-o \"ServerAliveInterval 10\" " +
+      "-o \"ServerAliveCountMax 2\" " +
       "core@#{instances[0].ip.public} << EOF\n" +
-      "docker run -d -p 3000:22 -p 2001:80 --name hook pandastrike/huxley_hook /bin/bash -c \""
+      "docker run -d -p 3000:22 -p 2001:80 --name hook " +
+      "pandastrike/huxley_hook /bin/bash -c \""
 
     # Pass in public keys so users may have access.
     for key in spec.public_keys

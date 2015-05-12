@@ -6,8 +6,11 @@ module.exports =
   install: async (instances) ->
     project = (x) -> x.ip.public
     for address in (collect map project, instances)
-      yield shell "ssh -A -o \"StrictHostKeyChecking no\" " +
+      yield shell "ssh -A " +
+        "-o \"StrictHostKeyChecking no\" " +
         "-o \"UserKnownHostsFile=/dev/null\" " +
+        "-o \"ServerAliveInterval 10\" " +
+        "-o \"ServerAliveCountMax 2\" " +
         "core@#{address} << EOF \n " +
         "mkdir launch \n" +
         "mkdir prelaunch \n" +
