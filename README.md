@@ -35,7 +35,5 @@ Install panda-cluster locally to your project with:
 npm install pandastrike/panda-cluster --save
 ```
 
-See [api-guide.md][8] for more information on programatic access.
-
 [huxley]:https://github.com/pandastrike/huxley
 [wiki]:https://github.com/pandastrike/huxley/wiki/Panda-Cluster
