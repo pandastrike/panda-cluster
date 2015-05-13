@@ -41,7 +41,7 @@ module.exports =
       command = command + " echo \'#{key}\' >> root/.ssh/authorized_keys && "
 
     # Add the cluster agent private key so the hook server can access the host.
-    command += " echo \'#{spec.cluster.agent.public}\' >> root/.ssh/id_rsa && " +
+    command += " echo \'#{spec.cluster.agent.private}\' >> root/.ssh/id_rsa && " +
       " chmod 400 root/.ssh/id_rsa && "
 
     # Have the server generate host keys, then activate the SSH server in non-
