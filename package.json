@@ -18,7 +18,10 @@
     "devops",
     "cloud"
   ],
-  "author": "David Harper",
+  "contributors": [
+    "David Harper <david@pandastrike.com>",
+    "Dan Yoder <dan@pandastrike.com>"
+  ],
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/pandastrike/panda-cluster/issues"
@@ -27,10 +30,10 @@
   "dependencies": {
     "amen": "^1.0.0-alpha-03",
     "aws-sdk": "^2.0.31",
-    "fairmont": "^1.0.0-beta-03",
+    "fairmont": "1.0.0-beta-03",
     "mustache": "^1.0.0",
-    "panda-config": "^1.0.0-alpha-03",
-    "pbx": "^1.0.0-beta-03",
+    "panda-config": "1.0.0-alpha-03",
+    "pbx": "1.0.0-beta-03",
     "when": "^3.6.3"
   },
   "engines": {

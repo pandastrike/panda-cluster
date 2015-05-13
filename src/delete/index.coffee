@@ -24,5 +24,5 @@ module.exports = async (spec) ->
     yield update spec, "stopped", "Cluster Is Fully Destroyed."
   catch error
     yield update spec, "failed", "Error during deletion."
-    console.log error
-    console.log line for line in (error.stack.split "\n")
+    #console.log error
+    #console.log line for line in (error.stack.split "\n")
