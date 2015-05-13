@@ -16,7 +16,7 @@ Panda-Cluster is part of the [Huxley Project][huxley], a tool that automates dep
 
 
 ## Requirements
-panda-cluster makes use of the ES6 standards, promises and generators.  Using this library requires Node 0.12+.
+panda-cluster makes use of ES6 features, including promises and generators.  Using this library requires Node 0.12+.
 
 ```shell
 git clone https://github.com/creationix/nvm.git ~/.nvm
