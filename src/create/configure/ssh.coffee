@@ -8,4 +8,4 @@ module.exports =
   "-o \"UserKnownHostsFile=/dev/null\" " +
   "-o \"ServerAliveInterval 10\" " +
   "-o \"ServerAliveCountMax 2\" " +
-  "-o \"ConnectTimeout 30\"  "
+  "-o \"ConnectTimeout 10\"  "
