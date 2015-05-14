@@ -6,7 +6,7 @@
 # machine and is Dockerized.
 {async, shell} = require "fairmont"
 
-{record} = require "../../../dns"
+{record, domain} = require "../../../dns"
 ssh_with_config = require "../ssh" # string with config details
 
 module.exports =
@@ -57,13 +57,13 @@ module.exports =
       "sed \"s/public_zone_id_goes_here/#{zones.public.id}/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
-      "sed \"s/public_zone_name_goes_here/#{zones.public.name}/g\" < kick.cson > temp && " +
+      "sed \"s/public_zone_name_goes_here/#{domain.fully_qualify zones.public.name}/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
       "sed \"s/private_zone_id_goes_here/#{zones.private.id}/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
-      "sed \"s/private_zone_name_goes_here/#{zones.private.name}/g\" < kick.cson > temp && " +
+      "sed \"s/private_zone_name_goes_here/#{domain.fully_qualify zones.private.name}/g\" < kick.cson > temp && " +
       "mv temp kick.cson && " +
 
       "sed \"s%api_server_name_goes_here%#{spec.huxley.url}%g\" < kick.cson > temp && " +
