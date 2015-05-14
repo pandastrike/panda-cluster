@@ -6,7 +6,7 @@
 # machine and is Dockerized.
 {async, shell} = require "fairmont"
 
-{record} = require "../../../dns"
+{record, domain} = require "../../../dns"
 ssh_with_config = require "../ssh" # string with config details
 
 module.exports =
@@ -37,7 +37,9 @@ module.exports =
 
     # TODO: Replace this with a mustache.js template.
     zones.public.id = zones.public.id.split("/")[2]
+    zones.public.name = domain.fully_qualify zones.public.name
     zones.private.id = zones.private.id.split("/")[2]
+    zones.private.name = domain.fully_qualify zones.private.name
 
     yield shell ssh_with_config +
       "core@#{instances[0].ip.public} << EOF\n" +
