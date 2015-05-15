@@ -14,7 +14,6 @@ module.exports =
 
     try
       clusters = (yield discover spec.huxley.url).clusters
-      data = yield clusters.update spec
-      console.log data
+      yield clusters.update spec
     catch error
       throw new Error "Failed to update status. \n #{error}"
