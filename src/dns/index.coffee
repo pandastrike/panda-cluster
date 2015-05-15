@@ -6,6 +6,7 @@
 {async} = require "fairmont"
 
 module.exports =
+  confirm: require "./confirm"
+  domain: require "./domain"
   hostedzone: require "./hostedzone"
   record: require "./record"
-  confirm: require "./confirm"
