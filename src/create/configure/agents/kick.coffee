@@ -44,7 +44,7 @@ module.exports =
     yield shell ssh_with_config +
       "core@#{instances[0].ip.public} << EOF\n" +
       "docker run -d -p 2000:8080 --name kick " +
-      "pandastrike/huxley_kick:v1.0.0-alpha-03.1 /bin/bash -c " +
+      "pandastrike/huxley_kick:v1.0.0-alpha-06 /bin/bash -c " +
       "\"cd panda-kick/config &&  " +
 
       "sed \"s/aws_id_goes_here/#{spec.aws.id}/g\" < kick.cson > temp && " +
