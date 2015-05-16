@@ -2,7 +2,7 @@
 # panda-cluster - Create - Monitor - Instances
 #===============================================================================
 # This code pulls data on individual instances.
-{async, collect, project, map, sleep} = require "fairmont"
+{async, collect, project, map, sleep, empty} = require "fairmont"
 
 module.exports =
   on_demand:
@@ -40,7 +40,7 @@ module.exports =
         success = collect map is_active, states
         failure = collect map is_failed, states
 
-        if states.length == 0
+        if empty states
           yield sleep 5000   # Request has yet to be created.
         else if true in failure
           throw new Error "Spot Request was not successfully fulfilled."
