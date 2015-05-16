@@ -25,7 +25,7 @@ module.exports =
     # Pull the hook-server's Docker container from the public repo.
     yield shell ssh_with_config +
       "core@#{instances[0].ip.public} << EOF\n" +
-      "docker pull pandastrike/huxley_hook \n" +
+      "docker pull pandastrike/huxley_hook:v1.0.0-alpha-06 \n" +
       "EOF"
 
     #----------------------------
@@ -34,7 +34,7 @@ module.exports =
     command = ssh_with_config +
       "core@#{instances[0].ip.public} << EOF\n" +
       "docker run -d -p 3000:22 -p 2001:80 --name hook " +
-      "pandastrike/huxley_hook /bin/bash -c \""
+      "pandastrike/huxley_hook:v1.0.0-alpha-06 /bin/bash -c \""
 
     # Pass in public keys so users may have access.
     for key in spec.public_keys

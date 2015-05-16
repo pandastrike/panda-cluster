@@ -25,7 +25,7 @@ module.exports =
     # Pull the kick-server's Docker container from the public repo.
     yield shell ssh_with_config +
       "core@#{instances[0].ip.public} << EOF\n" +
-      "docker pull pandastrike/huxley_kick:v1.0.0-alpha-03.1 \n" +
+      "docker pull pandastrike/huxley_kick:v1.0.0-alpha-06 \n" +
       "EOF"
 
 
