@@ -36,6 +36,7 @@ module.exports = async ({id, hostname, ip, action}, aws) ->
   # Does the requested record exist?
   data = yield aws.route53.list_resource_record_sets {HostedZoneId: id}
   record = collect where {Name: hostname}, data.ResourceRecordSets
+  console.log record
   if !empty record
     # When there is an existing record we must "DELETE" it before moving on.
     changes.push deletion record, hostname
