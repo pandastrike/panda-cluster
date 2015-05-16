@@ -25,7 +25,7 @@ module.exports =
     # Pull the kick-server's Docker container from the public repo.
     yield shell ssh_with_config +
       "core@#{instances[0].ip.public} << EOF\n" +
-      "docker pull pandastrike/huxley_kick:v1.0.0-alpha-06 \n" +
+      "docker pull pandastrike/huxley_kick:v1.0.0-alpha-03.1 \n" +
       "EOF"
 
 
@@ -41,10 +41,10 @@ module.exports =
     zones.private.id = zones.private.id.split("/")[2]
     zones.private.name = domain.fully_qualify zones.private.name
 
-    command = ssh_with_config +
+    yield shell ssh_with_config +
       "core@#{instances[0].ip.public} << EOF\n" +
       "docker run -d -p 2000:8080 --name kick " +
-      "pandastrike/huxley_kick:v1.0.0-alpha-06 /bin/bash -c " +
+      "pandastrike/huxley_kick:v1.0.0-alpha-03.1 /bin/bash -c " +
       "\"cd panda-kick/config &&  " +
 
       "sed \"s/aws_id_goes_here/#{spec.aws.id}/g\" < kick.cson > temp && " +
@@ -76,8 +76,5 @@ module.exports =
 
       "cd /panda-kick/src/ && coffee --nodejs --harmony server.coffee\" \n" +
       "EOF"
-
-    console.log command
-    yield shell command
 
     return change
