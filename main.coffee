@@ -1,1 +1,1 @@
-module.exports = require "./src/panda-cluster"
+module.exports = require "./src/main"
