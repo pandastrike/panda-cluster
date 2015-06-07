@@ -15,7 +15,7 @@ module.exports =
     resources.CoreOSServerLaunchConfig.Properties.SecurityGroups = [ {Ref: "ClusterSecurityGroup"} ]
     resources.CoreOSServerLaunchConfig.Properties.AssociatePublicIpAddress = "true"
     # Also give it a Spot Price if the user seeks to keep the cost down.
-    if spec.cluster.price > 0
+    if Number(spec.cluster.price) > 0
       resources.CoreOSServerLaunchConfig.Properties.SpotPrice = spec.cluster.price.toString()
 
     # Modify the object specifying the cluster's auto-scaling group.  Associate with the VPC.
