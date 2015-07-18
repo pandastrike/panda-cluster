@@ -17,12 +17,13 @@ module.exports = async (spec) ->
     yield update spec, "starting", "Launching Stack"
     yield launch spec, aws
 
-    # Monitor the cluster spinup.  Augment "spec" with resulting component IDs and IP addresses.
-    spec = yield monitor spec, aws
-
-    # Configure the cluster: Set hostname, install cluster agents
-    yield configure spec, aws
-    yield update spec, "online", "Cluster is ready."
+    console.log "Made it"
+    # # Monitor the cluster spinup.  Augment "spec" with resulting component IDs and IP addresses.
+    # spec = yield monitor spec, aws
+    #
+    # # Configure the cluster: Set hostname, install cluster agents
+    # yield configure spec, aws
+    # yield update spec, "online", "Cluster is ready."
   catch error
     yield update spec, "failed", "Error during creation."
     console.log error

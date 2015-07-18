@@ -1,12 +1,8 @@
 # Helpers for Huxley cluster launch method.
-{async, collect, project} = require "fairmont"
+{async, sleep, collect, project} = require "fairmont"
 
-{get, body} = (require "../../helpers").https
 
 module.exports =
-  # Wrapper for https call to etcd's discovery API.
-  get_discovery_url: async -> yield body yield get "https://discovery.etcd.io/new"
-
   # Validate the SSH key name submitted to Huxley.  We cannot form a cluster
   # without a key that is known to the user's AWS account.
   validate: async (key, aws) ->
@@ -15,4 +11,15 @@ module.exports =
     if key in names
       return true # Validated
     else
-      throw "This AWS account does not have a key pair named \"#{key_name}\"."
+      throw new Error "This AWS account does not have a key pair named \"#{key_name}\"."
+
+  # Wait for the ECS cluster to be capable of accepting deployments.
+  wait: async (spec, aws) ->
+    params = clusters: [ spec.cluster.name ]
+
+    while true
+      data = yield aws.ecs.describe_clusters params
+      if data.clusters[0].status == "active"
+        return true  # Cluster is ready
+      else
+        yield sleep 5000  # Needs more time.

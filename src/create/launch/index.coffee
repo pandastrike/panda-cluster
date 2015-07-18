@@ -4,35 +4,18 @@
 # This file coordinates the actions of the Huxley cluster spinup in AWS.
 {async} = require "fairmont"
 
-template = require "../template"
-{get_discovery_url, validate} = require "./helpers"
+ecs = require "../../ecs"
+{validate, wait} = require "./helpers"
 
 # Launch a Huxley cluster.
 module.exports = async (spec, aws) ->
-    # Create a "params" object for CloudFormation.
-    params = {}
-    params.StackName = spec.cluster.name
-    params.OnFailure = "DELETE"
-    params.TemplateBody = yield template.build spec
+    # Validate that the named SSH key exists in the user's AWS account.
+    yield validate spec.aws.key_name, aws
 
-    #---------------------------------------------------------------------------
-    # Parameters is a map of key/values custom defined for this stack by the
-    # template file.  We will now fill out the map as specified or with defaults.
-    #---------------------------------------------------------------------------
-    params.Parameters = [
-      # InstanceType
-      "ParameterKey": "InstanceType"
-      "ParameterValue": spec.cluster.type
-    , # ClusterSize
-      "ParameterKey": "ClusterSize"
-      "ParameterValue": spec.cluster.size
-    , # DiscoveryURL - Grab a randomized URL from etcd's free discovery service.
-      "ParameterKey": "DiscoveryURL"
-      "ParameterValue": yield get_discovery_url()
-    ,# KeyPair
-      "ParameterKey": "KeyPair"
-      "ParameterValue": spec.aws.key_name if yield validate spec.aws.key_name, aws
-    ]
+    # Establish an ECS cluster.
+    spec = yield ecs.build spec, aws
 
-    # Preparations complete.  Launch.
-    yield aws.cloudformation.create_stack params
+    # Now wait for it to be ready to accept deployments.
+    yield wait spec, aws
+
+    return spec
