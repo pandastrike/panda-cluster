@@ -31,10 +31,22 @@ module.exports = (creds) ->
       describe_stack_events: lift cf, cf.describeStackEvents
       describe_stack_resources: lift cf, cf.describeStackResources
     ec2:
+      associate_route_table: lift ec2, ec2.associateRouteTable
+      attach_internet_gateway: lift ec2, ec2.attachInternetGateway
+      create_internet_gateway: lift ec2, ec2.createInternetGateway
+      create_route: lift ec2, ec2.createRoute
+      create_route_table: lift ec2, ec2.createRouteTable
+      create_security_group: lift ec2, ec2.createSecurityGroup
+      create_subnet: lift ec2, ec2.createSubnet
+      create_vpc: lift ec2, ec2.createVpc
       describe_instances: lift ec2, ec2.describeInstances
       describe_key_pairs: lift ec2, ec2.describeKeyPairs
+      describe_route_tables: lift ec2, ec2.describeRouteTables
       describe_spot_instance_requests: lift ec2, ec2.describeSpotInstanceRequests
+      describe_subnets: lift ec2, ec2.describeSubnets
       describe_vpcs: lift ec2, ec2.describeVpcs
+      request_spot_instances: lift ec2, ec2.requestSpotInstances
+      run_instances: lift ec2, ec2.runInstances
     route53:
       change_resource_record_sets: lift r53, r53.changeResourceRecordSets
       create_hosted_zone: lift r53, r53.createHostedZone

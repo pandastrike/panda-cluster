@@ -6,19 +6,16 @@
 configure = require "./configure"
 launch = require "./launch"
 monitor = require "./monitor"
-{update} = require "../huxley"
+{update} = require "../huxley"   # Status updates to the Huxley API
 
 # Start and configure a cluster of cloud instances while monitoring state.
 module.exports = async (spec) ->
   # Pull in the promise wrapped functions of the "aws-sdk" library.
   aws = (require "../aws")(spec.aws)
   try
-    # Initiate cluster creation.
-    yield update spec, "starting", "Launching Stack"
-    yield launch spec, aws
-
-    # Monitor the cluster spinup.  Augment "spec" with resulting component IDs and IP addresses.
-    spec = yield monitor spec, aws
+    # Create a blank cluster as specified. Augment "spec" with resulting component IDs and IP addresses.
+    yield update spec, "starting", "Building Bare Cluster"
+    spec = yield launch spec, aws
 
     # Configure the cluster: Set hostname, install cluster agents
     yield configure spec, aws

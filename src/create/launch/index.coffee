@@ -4,35 +4,26 @@
 # This file coordinates the actions of the Huxley cluster spinup in AWS.
 {async} = require "fairmont"
 
-template = require "../template"
-{get_discovery_url, validate} = require "./helpers"
+{validate, wait} = require "./helpers"
+vpc = require "../../vpc"
+{demand, spot} = require "../../instances"
 
 # Launch a Huxley cluster.
 module.exports = async (spec, aws) ->
-    # Create a "params" object for CloudFormation.
-    params = {}
-    params.StackName = spec.cluster.name
-    params.OnFailure = "DELETE"
-    params.TemplateBody = yield template.build spec
+    # Validate that the named SSH key exists in the user's AWS account.
+    yield validate spec.aws.key_name, aws
 
-    #---------------------------------------------------------------------------
-    # Parameters is a map of key/values custom defined for this stack by the
-    # template file.  We will now fill out the map as specified or with defaults.
-    #---------------------------------------------------------------------------
-    params.Parameters = [
-      # InstanceType
-      "ParameterKey": "InstanceType"
-      "ParameterValue": spec.cluster.type
-    , # ClusterSize
-      "ParameterKey": "ClusterSize"
-      "ParameterValue": spec.cluster.size
-    , # DiscoveryURL - Grab a randomized URL from etcd's free discovery service.
-      "ParameterKey": "DiscoveryURL"
-      "ParameterValue": yield get_discovery_url()
-    ,# KeyPair
-      "ParameterKey": "KeyPair"
-      "ParameterValue": spec.aws.key_name if yield validate spec.aws.key_name, aws
-    ]
+    # Establish a VPC and its components.
+    spec = yield vpc.build spec, aws
 
-    # Preparations complete.  Launch.
-    yield aws.cloudformation.create_stack params
+    # Launch the EC2 instances, specified in the instances array, into the VPC.
+    for id, group of spec.cluster.resources
+      switch group.class
+        when "EC2 spot request" then spec = yield spot.create id, spec, aws
+        when "EC2 on demand"    then spec = yield demand.create id, spec, aws
+        else throw new Error "Unknown cluster resource descriptor."
+
+    # Now wait until all of them are ready,
+    yield wait spec, aws
+
+    return spec
