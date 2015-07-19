@@ -11,7 +11,7 @@ module.exports =
     if key in names
       return true # Validated
     else
-      throw new Error "This AWS account does not have a key pair named \"#{key_name}\"."
+      throw new Error "This AWS account does not have a key pair named \"#{key}\"."
 
   # Wait for the ECS cluster to be capable of accepting deployments.
   wait: async (spec, aws) ->
