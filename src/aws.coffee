@@ -21,6 +21,7 @@ module.exports = (creds) ->
   cf = new AWS.CloudFormation()
   ec2 = new AWS.EC2()
   r53 = new AWS.Route53()
+  ecs = new AWS.ECS()
 
   # Return an object containing a library of promise wrapped functions.  This
   # will be our Swiss Army Knife for accessing the AWS API.
