@@ -9,12 +9,6 @@ module.exports =
     # Isolate the "Resources" object within the template.
     resources = template.Resources
 
-    # We need start over to accomodate the VPC we've created.  So, delete the
-    # current Security Group configuration.
-    delete resources.CoreOSSecurityGroup
-    delete resources.Ingress4001
-    delete resources.Ingress7001
-
     # Expose the following ports...
     resources["ClusterSecurityGroup"] =
       Type: "AWS::EC2::SecurityGroup"
@@ -50,18 +44,6 @@ module.exports =
             IpProtocol: "tcp"
             FromPort: "3000"
             ToPort: "3999"
-            CidrIp: "0.0.0.0/0"
-          }
-          { # Exposed to Internet for etcd. TODO: Lock down so only CoreOS can access.
-            IpProtocol: "tcp"
-            FromPort: "4001"
-            ToPort: "4001"
-            CidrIp: "0.0.0.0/0"
-          }
-          { # Exposed to Internet for clustering. TODO: Lock down so only CoreOS can access.
-            IpProtocol: "tcp"
-            FromPort: "7001"
-            ToPort: "7001"
             CidrIp: "0.0.0.0/0"
           }
         ]

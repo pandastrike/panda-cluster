@@ -5,7 +5,6 @@
 
 configure = require "./configure"
 launch = require "./launch"
-monitor = require "./monitor"
 {update} = require "../huxley"
 
 # Start and configure a cluster of cloud instances while monitoring state.
@@ -17,11 +16,7 @@ module.exports = async (spec) ->
     yield update spec, "starting", "Launching Stack"
     yield launch spec, aws
 
-    console.log "Made it"
-    # # Monitor the cluster spinup.  Augment "spec" with resulting component IDs and IP addresses.
-    # spec = yield monitor spec, aws
-    #
-    # # Configure the cluster: Set hostname, install cluster agents
+    # # Configure the cluster... Set basic DNS and install cluster agents
     # yield configure spec, aws
     # yield update spec, "online", "Cluster is ready."
   catch error

@@ -12,14 +12,3 @@ module.exports =
       return true # Validated
     else
       throw new Error "This AWS account does not have a key pair named \"#{key}\"."
-
-  # Wait for the ECS cluster to be capable of accepting deployments.
-  wait: async (spec, aws) ->
-    params = clusters: [ spec.cluster.name ]
-
-    while true
-      data = yield aws.ecs.describe_clusters params
-      if data.clusters[0].status == "active"
-        return true  # Cluster is ready
-      else
-        yield sleep 5000  # Needs more time.
