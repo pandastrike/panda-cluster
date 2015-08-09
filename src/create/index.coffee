@@ -19,7 +19,7 @@ module.exports = async (spec) ->
 
     # Wait for cluster scaffolding to ready itself.
     spec = yield monitor spec, aws
-    console.log spec
+
     # # Configure the cluster... Set basic DNS and install cluster agents
     # yield configure spec, aws
     # yield update spec, "online", "Cluster is ready."

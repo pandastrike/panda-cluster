@@ -33,21 +33,21 @@ module.exports =
 
     data = yield aws.ec2.describe_vpcs params
     if empty data.Vpcs
-      spec.cluster.vpc_id = false
+      spec.cluster.vpc.id = false
       spec.cluster.zones = private: id: false
       return spec
-    
-    spec.cluster.vpc_id = data.Vpcs[0].VpcId
+
+    spec.cluster.vpc = id: data.Vpcs[0].VpcId
 
 
     # Get the HostedZoneID for the cluster's private hosted zone.  Now that we
     # have the cluster's VPC ID, we can look this up.
     data = yield aws.route53.list_hosted_zones {}
     # Dig the ID out of an array, holding an object, holding the string we need.
-    zone = collect where {CallerReference: spec.cluster.vpc_id}, data.HostedZones
+    zone = collect where {CallerReference: spec.cluster.vpc.id}, data.HostedZones
     if empty zone
-      spec.cluster.zones = private: id: false
+      spec.cluster.dns = private: id: false
     else
-      spec.cluster.zones = private: id: zone[0].Id
+      spec.cluster.dns = private: id: zone[0].Id
 
     return spec
