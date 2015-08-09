@@ -4,13 +4,9 @@
 # This file pulls together various configuration data to produce a complete
 # CloudFormation for a Huxley cluster.
 {async, to_json} = require "fairmont"
-{get, body} = (require "../../helpers").https
 
-templates = require "./source"
 vpc = require "./vpc"
 security_group = require "./security-group"
-autoscale = require "./autoscale"
-user_data = require "./user-data"
 
 module.exports =
   # Construct an AWS CloudFormation template and return it as a string.
