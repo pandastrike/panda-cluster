@@ -5,6 +5,7 @@
 
 configure = require "./configure"
 launch = require "./launch"
+monitor = require "./monitor"
 {update} = require "../huxley"
 
 # Start and configure a cluster of cloud instances while monitoring state.
@@ -16,6 +17,9 @@ module.exports = async (spec) ->
     yield update spec, "starting", "Launching Stack"
     yield launch spec, aws
 
+    # Wait for cluster scaffolding to ready itself.
+    spec = yield monitor spec, aws
+    console.log spec
     # # Configure the cluster... Set basic DNS and install cluster agents
     # yield configure spec, aws
     # yield update spec, "online", "Cluster is ready."
