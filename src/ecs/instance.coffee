@@ -45,7 +45,13 @@ module.exports =
 
     while true
       data = yield aws.ec2.describe_instances params
-      states = collect project "State", data.Reservations[0].Instances
+      try
+        states = collect project "State", data.Reservations[0].Instances
+      catch
+        # The instances are not yet properly registered.
+        yield sleep 5000
+        continue
+
       success = collect map is_active, states
       failure = collect map is_failed, states
 

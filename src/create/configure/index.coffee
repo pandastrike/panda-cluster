@@ -26,7 +26,7 @@ module.exports = async (spec, aws) ->
     },
     spec, aws
 
-  spec.cluster.host = host
+  spec.cluster.host = host[0]
   spec.cluster.host.type = host_type
   yield update spec, "starting", "Cluster Host Machine Online."
 
@@ -34,7 +34,6 @@ module.exports = async (spec, aws) ->
   changes = []
 
   # Set the public hostname to point at the cluster's host's public IP address.
-  console.log spec.cluster
   changes.push yield record {
       action: "set"
       hostname: "#{spec.cluster.name}.#{spec.cluster.dns.public.name}"
