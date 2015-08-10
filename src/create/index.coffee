@@ -14,7 +14,7 @@ module.exports = async (spec) ->
   aws = (require "../aws")(spec.aws)
   try
     # Initiate cluster creation.
-    yield update spec, "starting", "Launching Stack"
+    yield update spec, "starting", "Establishing Cluster VPC."
     yield launch spec, aws
 
     # Wait for cluster scaffolding to ready itself.
