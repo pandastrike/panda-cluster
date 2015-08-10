@@ -4,5 +4,5 @@ echo ECS_CLUSTER={{{cluster.name}}} >> /etc/ecs/ecs.config
 
 # Attach
 {{#public_keys}}
-echo {{.}} >> .ssh/authorized_keys
+echo {{.}} >> /home/ec2-user/.ssh/authorized_keys
 {{/public_keys}}
