@@ -14,7 +14,7 @@ module.exports = async (spec, aws) ->
     yield hostedzone.delete spec.cluster.dns.private.id, aws
 
   # Find and terminate all cluster instances.
-  params = Filters: [ {Name: "vpc-id", Value: spec.cluster.vpc.id } ]
+  params = Filters: [ {Name: "vpc-id", Values: [spec.cluster.vpc.id] } ]
   data = yield aws.ec2.describe_instances params
   instances = collect project "InstanceId", data.Reservations[0].Instances
   yield instance.delete instances, aws  if !empty instances
