@@ -14,6 +14,7 @@ module.exports = async (spec) ->
   try
     # Before we delete the stack, we must identify associated resources. We can
     # use the the VPC's ID to track these.
+    yield update spec, "shutting down", "Cluster VPC Lookup."
     spec = yield identify spec, aws
 
     # Delete the cluster.

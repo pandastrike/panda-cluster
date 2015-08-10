@@ -41,6 +41,7 @@ module.exports = (creds) ->
       terminate_instances: lift ec2, ec2.terminateInstances
     ecs:
       create_cluster: lift ecs, ecs.createCluster
+      delete_cluster: lift ecs, ecs.deleteCluster
       describe_clusters: lift ecs, ecs.describeClusters
     route53:
       change_resource_record_sets: lift r53, r53.changeResourceRecordSets

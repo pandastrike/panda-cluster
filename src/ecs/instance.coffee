@@ -35,7 +35,6 @@ module.exports =
       Name: "instance-id"
       Values: instances
     ]
-    console.log instances
     is_active = (x) -> Number(x.Code) == 16
     is_failed = (x) -> Number(x.Code) > 16
     identify = (x) ->
@@ -49,7 +48,7 @@ module.exports =
       states = collect project "State", data.Reservations[0].Instances
       success = collect map is_active, states
       failure = collect map is_failed, states
-      console.log states, success, failure
+
       if true in failure
         throw new Error "Instance(s) were not successfully activated."
       else if false !in success

@@ -26,6 +26,7 @@ module.exports = async (spec, aws) ->
     },
     spec, aws
 
+  console.log host
   spec.cluster.host = host
   spec.cluster.host.type = host_type
   yield update spec, "starting", "Cluster Host Machine Online."

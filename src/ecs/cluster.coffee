@@ -14,6 +14,10 @@ module.exports =
     spec.cluster.cloud.id = data.cluster.clusterArn
     return spec
 
+  # Delete the specified cluster.
+  delete: async (spec, aws) ->
+    yield aws.ecs.delete_cluster cluster: spec.cluster.name
+
   # Wait for the ECS cluster to be capable of accepting deployments.
   wait: async (spec, aws) ->
     params = clusters: [ spec.cluster.name ]
