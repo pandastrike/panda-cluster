@@ -1,5 +1,5 @@
 # This file contains the code that calls the actual deletion functions.
-{async, empty} = require "fairmont"
+{async, empty, collect, project} = require "fairmont"
 
 {hostedzone} = require "../dns"
 {update} = require "../huxley"
