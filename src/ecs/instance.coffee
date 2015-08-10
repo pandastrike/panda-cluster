@@ -14,9 +14,16 @@ module.exports =
       InstanceType: config.type
       KeyName: spec.aws.key_name
       Monitoring: Enabled: true
-      SecurityGroupIds: [ spec.cluster.vpc.sg.id ]
-      SubnetId: spec.cluster.vpc.subnet.id
       UserData: config.user_data
+      Tags: config.tags
+      NetworkInterfaces: [
+        {
+          AssociatePublicIpAddress: true
+          DeleteOnTermination: true
+          SubnetId: spec.cluster.vpc.subnet.id
+          Groups: [ spec.cluster.sg.id ]
+        }
+      ]
 
     params.Placement = AvailabilityZone: config.availability_zone if config.availability_zone
 

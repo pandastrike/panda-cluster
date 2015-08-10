@@ -20,7 +20,8 @@ module.exports = async (spec, aws) ->
       type: host_type
       price: 0
       virtualiziation: "hvm"
-      availability_zone: null
+      availability_zone: spec.aws.availability_zone
+      tags: [spec.cluster.cluster.tags[0], {Key: "Name", Value: "Host for #{spec.cluster.name}"}]
       user_data: new Buffer(user_data).toString('base64')
     },
     spec, aws
