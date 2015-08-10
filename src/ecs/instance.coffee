@@ -36,8 +36,8 @@ module.exports =
       Values: instances
     ]
     console.log instances
-    is_active = (x) -> Number(x.code) == 16
-    is_failed = (x) -> Number(x.code) > 16
+    is_active = (x) -> Number(x.Code) == 16
+    is_failed = (x) -> Number(x.Code) > 16
     identify = (x) ->
       id: x.InstanceId
       ip:
@@ -64,4 +64,25 @@ module.exports =
         yield sleep 5000 # Request is pending.
 
 
-  delete: async () ->
+  # Terminate all given instances.
+  delete: async (ids, aws) ->
+    # Terminate
+    yield aws.ec2.terminate_instances InstanceIds: ids
+
+    # Wait until termination is confirmed.
+    params = Filters: [
+      Name: "instance-id"
+      Values: ids
+    ]
+    is_terminated = (x) -> Number(x.Code) >= 48
+
+    while true
+      data = yield aws.ec2.describe_instances params
+      states = collect project "State", data.Reservations[0].Instances
+      success = collect map is_terminated, states
+
+      if false !in success
+        # All instances are offline.
+        return
+      else
+        yield sleep 5000 # Instances are still shutting-down.
