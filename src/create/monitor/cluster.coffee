@@ -20,26 +20,31 @@ module.exports =
 
   # Retrieve data about successfully deployed clusters.
   identify: async (spec, aws) ->
-    spec.cluster.vpc =
-      id: null
-      subnet: id: null
-
-    # Subnet ID:  We can use the CloudFormation stack name to query AWS for the physical ID.
-    params =
-      StackName: spec.cluster.name
-      LogicalResourceId: "ClusterSubnet"
-
-    data = yield aws.cloudformation.describe_stack_resources params
-    spec.cluster.vpc.subnet.id = data.StackResources[0].PhysicalResourceId
-
-    # VPC ID: Also tagged with the stack name.
+    # VPC ID: We can use the CloudFormation stack name to query AWS for the physical ID.
     params = Filters: [
       Name: "tag:Name"
       Values: [ spec.cluster.name ]
     ]
 
     data = yield aws.ec2.describe_vpcs params
-    spec.cluster.vpc.id = data.Vpcs[0].VpcId
+    spec.cluster.vpc = id: data.Vpcs[0].VpcId
+
+    # Lookup the Subnet contained within this VPC.
+    params =
+      StackName: spec.cluster.name
+      LogicalResourceId: "ClusterSubnet"
+
+    data = yield aws.cloudformation.describe_stack_resources params
+    spec.cluster.vpc.subnet = id: data.StackResources[0].PhysicalResourceId
+
+    # Lookup the Security Group contained within this VPC.
+    params = Filters: [
+      Name: spec.cluster.name
+      LogicalResourceId: "ClusterSecurityGroup"
+    ]
+
+    data = yield aws.cloudformation.describe_stack_resources params
+    spec.cluster.vpc.sg = id: data.StackResources[0].PhysicalResourceId
 
     # Get the HostedZoneID for the public hosted zone.  We can look it up by the
     # name because public domains must be unique.

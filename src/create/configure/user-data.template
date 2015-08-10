@@ -1,0 +1,8 @@
+#!/bin/bash
+# Launch this instance into our custom ECS cluster.
+echo ECS_CLUSTER={{{cluster.name}}} >> /etc/ecs/ecs.config
+
+# Attach
+{{#public_keys}}
+echo {{.}} >> root/.ssh/authorized_keys
+{{/public_keys}}

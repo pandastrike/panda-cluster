@@ -5,61 +5,51 @@
 {async, collect, project, map, sleep, empty} = require "fairmont"
 
 module.exports =
-  on_demand:
-    # When more expensive on-demand instances are used, they start right away.
-    # We just need to query on the stack name and pull active instances.
-    get: async (spec, aws) ->
-      params = Filters: [
-        Name: "tag:aws:cloudformation:stack-name"
-        Values: [ spec.cluster.name ] # Only instances within our stack.
-      ,
-        Name: "instance-state-code"
-        Values: [ "16" ] # Only examine running instances.
-      ]
+  # Create one or more EC2 instance and launch it into the ECS cluster.
+  create: async (config, spec, aws) ->
+    params =
+      ImageId: require("./ami")[spec.aws.region]
+      MaxCount: config.count
+      MinCount: config.count
+      InstanceType: config.type
+      KeyName: spec.aws.key_name
+      Monitoring: Enabled: true
+      SecurityGroupIds: [ spec.cluster.vpc.sg.id ]
+      SubnetId: spec.cluster.vpc.subnet.id
+      UserData: config.user_data
 
-      data = yield aws.ec2.describe_instances params
-      identify = (x) -> id: x.InstanceId
-      return collect map identify, data.Reservations[0].Instances
+    params.Placement = AvailabilityZone: config.availability_zone if config.availability_zone
 
+    data = yield aws.ec2.run_instances params
+    instances = collect project "InstanceId", data.Instances
 
-  spot:
-    # Spot Instances go through a lifecycle.  Poll until they have been fulfilled.
-    get: async (spec, aws) ->
-      params = Filters: [
-        Name: "network-interface.subnet-id"
-        Values: [spec.cluster.subnet_id]
-      ]
-
-      is_active = (x) -> x == "active"
-      is_failed = (x) -> x == "closed" || x == "failed" || x == "cancelled"
-      identify = (x) -> id: x.InstanceId
-
-      while true
-        {SpotInstanceRequests} = yield aws.ec2.describe_spot_instance_requests params
-        states = collect project "State", SpotInstanceRequests
-        success = collect map is_active, states
-        failure = collect map is_failed, states
-
-        if empty states
-          yield sleep 5000   # Request has yet to be created.
-        else if true in failure
-          throw new Error "Spot Request was not successfully fulfilled."
-        else if false !in success
-          # *All* spot instances are online and ready.
-          return collect map identify, SpotInstanceRequests
-        else
-          yield sleep 5000 # Request is pending.
-
-
-  # Return the public and private facing IP address of a single instance.
-  address: async (id, aws) ->
+    # Wait for all these instances to be online.
     params = Filters: [
       Name: "instance-id"
-      Values: [ id ]
+      Values: instances
     ]
 
-    data = yield aws.ec2.describe_instances params
-    return {
-      public: data.Reservations[0].Instances[0].PublicIpAddress
-      private: data.Reservations[0].Instances[0].PrivateIpAddress
-    }
+    is_active = (x) -> Number(x.code) == 16
+    is_failed = (x) -> Number(x.code) > 16
+    identify = (x) ->
+      id: x.InstanceId
+      ip:
+        public: x.PublicIpAddress
+        private: x.PrivateIpAddress
+
+    while true
+      data = yield aws.ec2.describe_instances params
+      states = collect project "State", data.Reservations[0].Instances
+      success = collect map is_active, states
+      failure = collect map is_failed, states
+
+      if true in failure
+        throw new Error "Instance(s) were not successfully activated."
+      else if false !in success
+        # *All* instances are online and ready.
+        return collect map identify, data.Reservations[0].Instances
+      else
+        yield sleep 5000 # Request is pending.
+
+
+  delete: async () ->

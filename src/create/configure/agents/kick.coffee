@@ -7,24 +7,24 @@
 {async, shell} = require "fairmont"
 
 {record, domain} = require "../../../dns"
-ssh_with_config = require "../ssh" # string with config details
+ssh_with_config = require "./ssh" # string with config details
 
 module.exports =
   # Access the head instance and load the agent's Docker image.
   install: async (spec, aws) ->
-    {zones, instances} = spec.cluster
+    {dns, host} = spec.cluster
     # Address the kick server on the cluster's private hostedzone.
     change = yield record {
         action: "set"
-        hostname: "kick.#{zones.private.name}"
-        id: zones.private.id
-        ip: instances[0].ip.private
+        hostname: "kick.#{dns.private.name}"
+        id: dns.private.id
+        ip: host.ip.private
       },
       aws
 
     # Pull the kick-server's Docker container from the public repo.
     yield shell ssh_with_config +
-      "core@#{instances[0].ip.public} << EOF\n" +
+      "core@#{host.ip.public} << EOF\n" +
       "docker pull pandastrike/huxley_kick:v1.0.0-alpha-03.1 \n" +
       "EOF"
 
@@ -36,13 +36,13 @@ module.exports =
     # They exist only in the running container and are *NOT* stored in the image.
 
     # TODO: Replace this with a mustache.js template.
-    zones.public.id = zones.public.id.split("/")[2]
-    zones.public.name = domain.fully_qualify zones.public.name
-    zones.private.id = zones.private.id.split("/")[2]
-    zones.private.name = domain.fully_qualify zones.private.name
+    zones.public.id = dns.public.id.split("/")[2]
+    zones.public.name = domain.fully_qualify dns.public.name
+    zones.private.id = dns.private.id.split("/")[2]
+    zones.private.name = domain.fully_qualify dns.private.name
 
     yield shell ssh_with_config +
-      "core@#{instances[0].ip.public} << EOF\n" +
+      "core@#{host.ip.public} << EOF\n" +
       "docker run -d -p 2000:8080 --name kick " +
       "pandastrike/huxley_kick:v1.0.0-alpha-03.1 /bin/bash -c " +
       "\"cd panda-kick/config &&  " +

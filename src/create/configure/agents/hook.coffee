@@ -7,24 +7,24 @@
 {async, shell} = require "fairmont"
 
 {record} = require "../../../dns"
-ssh_with_config = require "../ssh" # string with config details
+ssh_with_config = require "./ssh" # string with config details
 
 module.exports =
   # Access the head instance and load the agent's Docker image.
   install: async (spec, aws) ->
-    {zones, instances} = spec.cluster
+    {dns, host} = spec.cluster
     # Address the kick server on the cluster's private hostedzone.
     change = yield record {
         action: "set"
-        hostname: "hook.#{zones.private.name}"
-        id: zones.private.id
-        ip: instances[0].ip.private
+        hostname: "hook.#{dns.private.name}"
+        id: dns.private.id
+        ip: host.ip.private
       },
       aws
 
     # Pull the hook-server's Docker container from the public repo.
     yield shell ssh_with_config +
-      "core@#{instances[0].ip.public} << EOF\n" +
+      "core@#{host.ip.public} << EOF\n" +
       "docker pull pandastrike/huxley_hook:v1.0.0-alpha-06 \n" +
       "EOF"
 
@@ -32,7 +32,7 @@ module.exports =
     # Activate the hook server.
     #----------------------------
     command = ssh_with_config +
-      "core@#{instances[0].ip.public} << EOF\n" +
+      "core@#{host.ip.public} << EOF\n" +
       "docker run -d -p 3000:22 -p 2001:80 --name hook " +
       "pandastrike/huxley_hook:v1.0.0-alpha-06 /bin/bash -c \""
 

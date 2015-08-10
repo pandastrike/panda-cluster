@@ -3,10 +3,10 @@
 #===============================================================================
 {async} = require "fairmont"
 
-configure = require "./configure"
+{update} = require "../huxley"
 launch = require "./launch"
 monitor = require "./monitor"
-{update} = require "../huxley"
+configure = require "./configure"
 
 # Start and configure a cluster of cloud instances while monitoring state.
 module.exports = async (spec) ->
@@ -20,9 +20,9 @@ module.exports = async (spec) ->
     # Wait for cluster scaffolding to ready itself.
     spec = yield monitor spec, aws
 
-    # # Configure the cluster... Set basic DNS and install cluster agents
-    # yield configure spec, aws
-    # yield update spec, "online", "Cluster is ready."
+    # Configure the cluster... Set basic DNS and install cluster agents
+    yield configure spec, aws
+    yield update spec, "online", "Cluster is ready."
   catch error
     yield update spec, "failed", "Error during creation."
     console.log error
