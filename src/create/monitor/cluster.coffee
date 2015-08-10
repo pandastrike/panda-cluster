@@ -38,10 +38,9 @@ module.exports =
     spec.cluster.vpc.subnet = id: data.StackResources[0].PhysicalResourceId
 
     # Lookup the Security Group contained within this VPC.
-    params = Filters: [
-      Name: spec.cluster.name
+    params =
+      StackName: spec.cluster.name
       LogicalResourceId: "ClusterSecurityGroup"
-    ]
 
     data = yield aws.cloudformation.describe_stack_resources params
     spec.cluster.vpc.sg = id: data.StackResources[0].PhysicalResourceId
