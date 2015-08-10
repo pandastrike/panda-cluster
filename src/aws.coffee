@@ -32,6 +32,7 @@ module.exports = (creds) ->
       describe_stack_events: lift cf, cf.describeStackEvents
       describe_stack_resources: lift cf, cf.describeStackResources
     ec2:
+      create_tags: lift ec2, ec2.createTags
       describe_instances: lift ec2, ec2.describeInstances
       describe_key_pairs: lift ec2, ec2.describeKeyPairs
       describe_spot_instance_requests: lift ec2, ec2.describeSpotInstanceRequests

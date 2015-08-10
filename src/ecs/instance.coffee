@@ -15,7 +15,6 @@ module.exports =
       KeyName: spec.aws.key_name
       Monitoring: Enabled: true
       UserData: config.user_data
-      Tags: config.tags
       NetworkInterfaces: [
         {
           AssociatePublicIpAddress: true
@@ -54,6 +53,11 @@ module.exports =
         throw new Error "Instance(s) were not successfully activated."
       else if false !in success
         # *All* instances are online and ready.
+        params =
+          Resources: instances
+          Tags: config.tags
+          
+        yield aws.ec2.create_tags params
         return collect map identify, data.Reservations[0].Instances
       else
         yield sleep 5000 # Request is pending.
