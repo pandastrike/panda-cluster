@@ -28,7 +28,7 @@ module.exports = async (spec, aws) ->
 
   spec.cluster.host = host
   spec.cluster.host.type = host_type
-
+  yield update spec, "starting", "Cluster Host Machine Online."
 
   # As we proceed, gather a list of "change IDs" from DNS alterations.
   changes = []
@@ -43,7 +43,7 @@ module.exports = async (spec, aws) ->
     aws
 
   # Create a private hosted zone to address internal components.
-  yield update spec, "starting", "Creating Private Hosted Zone."
+  yield update spec, "starting", "Creating Private DNS Hosted Zone."
   spec.cluster.dns.private.id = yield hostedzone.create {
       domain: spec.cluster.dns.private.name
       vpc: spec.cluster.vpc.id
