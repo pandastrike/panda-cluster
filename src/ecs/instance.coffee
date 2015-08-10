@@ -19,6 +19,7 @@ module.exports =
         {
           AssociatePublicIpAddress: true
           DeleteOnTermination: true
+          DeviceIndex: 0
           SubnetId: spec.cluster.vpc.subnet.id
           Groups: [ spec.cluster.vpc.sg.id ]
         }
@@ -56,7 +57,7 @@ module.exports =
         params =
           Resources: instances
           Tags: config.tags
-          
+
         yield aws.ec2.create_tags params
         return collect map identify, data.Reservations[0].Instances
       else
