@@ -36,6 +36,7 @@ module.exports = (creds) ->
       describe_key_pairs: lift ec2, ec2.describeKeyPairs
       describe_spot_instance_requests: lift ec2, ec2.describeSpotInstanceRequests
       describe_vpcs: lift ec2, ec2.describeVpcs
+      run_instances: lift ec2, ec2.runInstances
     ecs:
       create_cluster: lift ecs, ecs.createCluster
       describe_clusters: lift ecs, ecs.describeClusters
