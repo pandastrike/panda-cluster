@@ -21,7 +21,7 @@ module.exports =
           AssociatePublicIpAddress: true
           DeleteOnTermination: true
           SubnetId: spec.cluster.vpc.subnet.id
-          Groups: [ spec.cluster.sg.id ]
+          Groups: [ spec.cluster.vpc.sg.id ]
         }
       ]
 
