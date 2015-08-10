@@ -14,13 +14,14 @@ agent = require "./agents"
 module.exports = async (spec, aws) ->
   # Establish a "host machine", one instance with the cluster's Huxley agents.
   host_type = "m3.medium"
+  user_data = render (yield read join __dirname, "user-data.template"), spec
   host = yield instance.create {
       count: 1
       type: host_type
       price: 0
       virtualiziation: "hvm"
       availability_zone: null
-      user_data: render (yield read join __dirname, "user-data.template"), spec
+      user_data: new Buffer(user_data).toString('base64')
     },
     spec, aws
 
