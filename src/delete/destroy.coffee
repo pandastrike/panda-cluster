@@ -1,5 +1,5 @@
 # This file contains the code that calls the actual deletion functions.
-{async} = require "fairmont"
+{async, empty} = require "fairmont"
 
 {hostedzone} = require "../dns"
 {update} = require "../huxley"
@@ -17,7 +17,7 @@ module.exports = async (spec, aws) ->
   params = Filters: [ {Name: "vpc-id", Values: spec.cluster.vpc.id} ]
   data = yield aws.ec2.describe_instances params
   instances = collect project "InstanceId", data.Reservations[0].Instances
-  yield instance.delete instances, aws
+  yield instance.delete instances, aws  if !empty instances
 
   # Delete the CloudFormation Stack running our VPC.
   yield aws.cloudformation.delete_stack {StackName: spec.cluster.name}
