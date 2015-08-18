@@ -43,6 +43,9 @@ module.exports = (creds) ->
       create_cluster: lift ecs, ecs.createCluster
       delete_cluster: lift ecs, ecs.deleteCluster
       describe_clusters: lift ecs, ecs.describeClusters
+      describe_tasks: lift ecs, ecs.describeTasks
+      register_task_definition: lift ecs, ecs.registerTaskDefinition
+      start_task: lift ecs, ecs.startTask
     route53:
       change_resource_record_sets: lift r53, r53.changeResourceRecordSets
       create_hosted_zone: lift r53, r53.createHostedZone

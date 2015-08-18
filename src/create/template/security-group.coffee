@@ -40,6 +40,12 @@ module.exports =
             ToPort: "2999"
             CidrIp: "10.0.0.0/8"
           }
+          { # Private Docker registry port, exposed only to machines within the cluster.
+            IpProtocol: "tcp"
+            FromPort: "5000"
+            ToPort: "5000"
+            CidrIp: "10.0.0.0/8"
+          }
           { # Free ports exposed to public Internet.
             IpProtocol: "tcp"
             FromPort: "3000"

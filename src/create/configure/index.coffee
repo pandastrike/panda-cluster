@@ -1,63 +1,32 @@
 #===============================================================================
 # panda-cluster - Create - Configure
 #===============================================================================
-# Configure the cluster: Set hostname, install cluster agents
-{join} = require "path"
-{async, read} = require "fairmont"
-{render} = require "mustache"
+# Configure the cluster: Establish host, install cluster agent, install registry
+{async} = require "fairmont"
 
-{instance} = require "../../ecs"
-agent = require "./agents"
-{record, hostedzone, confirm} = require "../../dns"
+host = require "./host"
+agent = require "./agent"
+registry = require "./registry"
 {update} = require "../../huxley"
 
 module.exports = async (spec, aws) ->
-  # Establish a "host machine", one instance with the cluster's Huxley agents.
-  host_type = "m3.medium"
-  user_data = render (yield read join __dirname, "user-data.template"), spec
-  host = yield instance.create {
-      count: 1
-      type: host_type
-      price: 0
-      virtualiziation: "hvm"
-      availability_zone: spec.aws.availability_zone
-      tags: [spec.cluster.tags[0], {Key: "Name", Value: "Host for #{spec.cluster.name}"}]
-      user_data: new Buffer(user_data).toString('base64')
-    },
-    spec, aws
-
-  spec.cluster.host = host[0]
-  spec.cluster.host.type = host_type
+  # Establish a "host machine", one instance with the cluster's Huxley agent.
+  spec = yield host.install spec, aws
   yield update spec, "starting", "Cluster Host Machine Online."
 
   # As we proceed, gather a list of "change IDs" from DNS alterations.
   changes = []
+  changes.push yield host.dns spec, aws
+  changes.push yield agent.dns spec, aws
+  changes.push yield registry.dns spec, aws
 
-  # Set the public hostname to point at the cluster's host's public IP address.
-  changes.push yield record {
-      action: "set"
-      hostname: "#{spec.cluster.name}.#{spec.cluster.dns.public.name}"
-      id: spec.cluster.dns.public.id
-      ip: spec.cluster.host.ip.public
-    },
-    aws
+  # Install the cluster's Huxley agent.
+  yield update spec, "starting", "Installing Huxley Agent."
+  spec = yield agent.install spec, aws
 
-  # Create a private hosted zone to address internal components.
-  yield update spec, "starting", "Creating Private DNS Hosted Zone."
-  spec.cluster.dns.private.id = yield hostedzone.create {
-      domain: spec.cluster.dns.private.name
-      vpc: spec.cluster.vpc.id
-      region: spec.aws.region
-    },
-    aws
-
-  # # Install the cluster's kick server agent.
-  # yield update spec, "starting", "Installing Kick Server."
-  # changes.push yield agent.kick.install spec, aws
-  #
-  # # Install the cluster's hook server agent.
-  # yield update spec, "starting", "Installing Hook Server."
-  # changes.push yield agent.hook.install spec, aws
+  # Install the cluster's private Docker registry.
+  yield update spec, "starting", "Installing Private Docker Registry."
+  spec = yield registry.install spec, aws
 
   # Confirm all DNS records we've set are synchronized.  We poll here to
   # not block Docker setup while the DNS records are synchronized.
