@@ -1,9 +1,14 @@
 Panda-Cluster
 ============
 
+> **IMPORTANT** This project is no longer under active development.
+> Based on what we've learned building this,
+> we recommend looking at [Convox][] instead.
+
+[Convox]:https://github.com/convox/rack
+
 ### Manage Huxley Clusters
 ---
-> **Warning:** This library is part of [Huxley][huxley], an experimental project under heavy development.  It's awesome and becoming even more so, but it is a work in progress.
 
 Managing your project's infrastructure can be a little tedious.  Imagine that you want to spin-up a cluster of 10 machines on Amazon Web Services (AWS):
 - You go find your favored Amazon Machine Image,
